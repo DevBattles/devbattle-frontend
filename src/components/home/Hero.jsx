@@ -1,29 +1,33 @@
-import { Button } from "@/components/ui/button";
+import Section from "@/components/layout/Section";
+import HeroContent from "./HeroContent";
+import HeroEditor from "./HeroEditor";
+import Glow from "@/components/common/Glow";
 
 function Hero() {
   return (
-    <section className="py-24">
-      <div className="mx-auto max-w-4xl text-center">
-        <h1 className="text-6xl font-bold">
-          Practice.
-          <span className="text-blue-600"> Compete.</span>
-          Learn.
-        </h1>
+    <Section className="relative overflow-hidden bg-[#050816]">
 
-        <p className="mt-6 text-lg text-gray-600">
-          DevBattles helps developers improve through coding battles,
-          assignments and AI-powered learning.
-        </p>
+      <Glow />
 
-        <div className="mt-10 flex justify-center gap-4">
-          <Button>Get Started</Button>
+      {/* Grid Background */}
+      <div
+        className="absolute inset-0 opacity-[0.05]"
+        style={{
+          backgroundImage:
+            "linear-gradient(#4ade80 1px, transparent 1px),linear-gradient(90deg,#4ade80 1px,transparent 1px)",
+          backgroundSize: "60px 60px",
+        }}
+      />
 
-          <Button variant="outline">
-            Explore
-          </Button>
-        </div>
+      <div className="relative grid min-h-screen items-center gap-20 lg:grid-cols-2">
+
+        <HeroContent />
+
+        <HeroEditor />
+
       </div>
-    </section>
+
+    </Section>
   );
 }
 
