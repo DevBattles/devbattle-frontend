@@ -2,7 +2,7 @@ import { Navigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 
 function PublicRoute({ children }) {
-  const { loading, isAuthenticated } = useAuth();
+  const { loading, isAuthenticated, getDashboardPath } = useAuth();
 
   if (loading) {
     return (
@@ -13,7 +13,7 @@ function PublicRoute({ children }) {
   }
 
   if (isAuthenticated) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={getDashboardPath()} replace />;
   }
 
   return children;

@@ -3,9 +3,11 @@ import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Bot, Send, User } from "lucide-react";
 
 import AgentLoading from "@/components/dashboard/AgentLoading";
+import { useAuth } from "@/context/AuthContext";
 
 function Agent() {
   const navigate = useNavigate();
+  const { getDashboardPath } = useAuth();
 
   const bottomRef = useRef(null);
 
@@ -102,7 +104,7 @@ function Agent() {
           </div>
 
           <button
-            onClick={() => navigate("/dashboard")}
+            onClick={() => navigate(getDashboardPath())}
             className="flex items-center gap-2 rounded-xl border border-slate-700 px-5 py-2 hover:bg-slate-800"
           >
             <ArrowLeft size={18} />

@@ -1,4 +1,5 @@
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
+import { useAuth } from "@/context/AuthContext";
 
 import PublicLayout from "@/components/layout/PublicLayout";
 import DashboardLayout from "@/components/layout/DashboardLayout";
@@ -52,6 +53,17 @@ import Settings from "@/pages/Settings";
 
 // Others
 import NotFound from "@/pages/NotFound";
+
+const DashboardRedirect = () => {
+  const { getDashboardPath } = useAuth();
+  return <Navigate to={getDashboardPath()} replace />;
+};
+
+const ProfileRedirect = () => {
+  const { user } = useAuth();
+  const profilePath = user?.role ? `/${user.role}/profile` : "/login";
+  return <Navigate to={profilePath} replace />;
+};
 
 function AppRouter() {
   return (
@@ -191,9 +203,7 @@ function AppRouter() {
         path="/dashboard"
         element={
           <ProtectedRoute>
-            <div className="p-6 text-white bg-[#050816] min-h-screen">
-              Please use /student/dashboard, /teacher/dashboard, or /admin/dashboard
-            </div>
+            <DashboardRedirect />
           </ProtectedRoute>
         }
       />
@@ -202,9 +212,7 @@ function AppRouter() {
         path="/profile"
         element={
           <ProtectedRoute>
-            <div className="p-6 text-white bg-[#050816] min-h-screen">
-              Please use /student/profile, /teacher/profile, or /admin/profile
-            </div>
+            <ProfileRedirect />
           </ProtectedRoute>
         }
       />

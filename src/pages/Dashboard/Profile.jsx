@@ -16,7 +16,7 @@ import ProfileLoading from "@/components/dashboard/ProfileLoading";
 
 function Profile() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, getDashboardPath } = useAuth();
 
   const [loading, setLoading] = useState(true);
 
@@ -51,7 +51,7 @@ function Profile() {
           </div>
 
           <button
-            onClick={() => navigate("/dashboard")}
+            onClick={() => navigate(getDashboardPath())}
             className="flex items-center gap-2 rounded-xl border border-slate-700 px-5 py-2 hover:bg-slate-800"
           >
             <ArrowLeft size={18} />
