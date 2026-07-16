@@ -143,6 +143,7 @@ function AppRouter() {
         <Route path="contests" element={<StudentContests />} />
         <Route path="leaderboard" element={<StudentLeaderboard />} />
         <Route path="workspace/:id" element={<Workspace />} />
+        <Route path="contest/:contestId/solve" element={<Workspace />} />
         <Route path="ai-chat" element={<AIChat />} />
         <Route path="profile" element={<Profile />} />
         <Route path="settings" element={<Settings />} />

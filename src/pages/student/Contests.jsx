@@ -1,9 +1,11 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Input } from "@/components/ui/Input";
 import { Select, SelectItem } from "@/components/ui/Select";
+import toast from "react-hot-toast";
+import api from "@/services/api";
 import {
   Search,
   Trophy,
@@ -13,91 +15,97 @@ import {
   CheckCircle,
   Calendar,
   Award,
-  Lock,
 } from "lucide-react";
 
 function StudentContests() {
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("all");
+  const [contestsList, setContestsList] = useState([]);
+  const [registrations, setRegistrations] = useState({}); // { [contestId]: boolean }
+  const [loading, setLoading] = useState(true);
 
-  const contests = [
-    {
-      id: 1,
-      name: "React Challenge 2024",
-      description: "Test your React skills with this exciting challenge featuring real-world scenarios",
-      startTime: "2024-01-18 10:00",
-      endTime: "2024-01-18 14:00",
-      duration: "4 hours",
-      questions: 5,
-      participants: 234,
-      status: "Upcoming",
-      registered: true,
-      myRank: null,
-      myScore: null,
-    },
-    {
-      id: 2,
-      name: "Full Stack Sprint",
-      description: "Build a complete full-stack application in this intensive sprint contest",
-      startTime: "2024-01-21 14:00",
-      endTime: "2024-01-21 20:00",
-      duration: "6 hours",
-      questions: 8,
-      participants: 156,
-      status: "Upcoming",
-      registered: false,
-      myRank: null,
-      myScore: null,
-    },
-    {
-      id: 3,
-      name: "JavaScript Mastery",
-      description: "Prove your JavaScript expertise with advanced coding challenges",
-      startTime: "2024-01-15 09:00",
-      endTime: "2024-01-15 13:00",
-      duration: "4 hours",
-      questions: 6,
-      participants: 189,
-      status: "Completed",
-      registered: true,
-      myRank: 15,
-      myScore: 85,
-    },
-    {
-      id: 4,
-      name: "CSS Art Battle",
-      description: "Create stunning visual art using only CSS in this creative contest",
-      startTime: "2024-01-25 11:00",
-      endTime: "2024-01-25 15:00",
-      duration: "4 hours",
-      questions: 3,
-      participants: 98,
-      status: "Upcoming",
-      registered: false,
-      myRank: null,
-      myScore: null,
-    },
-  ];
+  const fetchContests = async () => {
+    try {
+      setLoading(true);
+      const res = await api.get("/contests");
+      const list = res.data.data?.data || res.data.data || [];
+      setContestsList(list);
 
-  const filteredContests = contests.filter((contest) => {
-    const matchesSearch =
-      contest.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      contest.description.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus =
-      selectedStatus === "all" || contest.status === selectedStatus;
-    return matchesSearch && matchesStatus;
-  });
+      // Check registration for each contest
+      const regMap = {};
+      await Promise.all(
+        list.map(async (c) => {
+          try {
+            await api.get(`/contests/${c.id}/questions`);
+            regMap[c.id] = true;
+          } catch (e) {
+            regMap[c.id] = false;
+          }
+        })
+      );
+      setRegistrations(regMap);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to load contests.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const getTimeRemaining = (startTime) => {
+  useEffect(() => {
+    fetchContests();
+  }, []);
+
+  const handleRegister = async (contestId) => {
+    try {
+      await api.post(`/contests/${contestId}/join`);
+      toast.success("Successfully registered for contest!");
+      setRegistrations((prev) => ({ ...prev, [contestId]: true }));
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.message || "Failed to register for contest.");
+    }
+  };
+
+  const handleStartContest = async (contestId) => {
+    try {
+      // Call start timer
+      await api.post(`/contests/${contestId}/start`);
+      // Fetch questions to find the first question ID
+      const qRes = await api.get(`/contests/${contestId}/questions`);
+      const questions = qRes.data.data || [];
+      
+      if (questions.length === 0) {
+        toast.error("No questions in this contest yet.");
+        return;
+      }
+      
+      const firstQuestionId = questions[0].questionId || questions[0].id;
+      // Navigate to solve workspace passing questionId and contestId as query parameter
+      navigate(`/student/workspace/${firstQuestionId}?contestId=${contestId}`);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to start contest.");
+    }
+  };
+
+  const getDaysRemaining = (startTime) => {
     const start = new Date(startTime);
     const now = new Date();
     const diffTime = start - now;
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    const diffHours = Math.ceil(diffTime / (1000 * 60 * 60));
-    if (diffDays > 0) return `${diffDays} days`;
-    if (diffHours > 0) return `${diffHours} hours`;
-    return "Starting soon";
+    return diffDays;
   };
+
+  const filteredContests = contestsList.filter((contest) => {
+    const name = contest.title || contest.name || "";
+    const desc = contest.description || "";
+    const matchesSearch =
+      name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      desc.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesSearch;
+  });
 
   return (
     <div className="space-y-6">
@@ -105,78 +113,8 @@ function StudentContests() {
       <div>
         <h1 className="text-2xl font-bold text-white">Contests</h1>
         <p className="text-slate-400">
-          Join live coding contests and compete with other students
+          Join active live coding contests, compete with others, and view leaderboard ranks
         </p>
-      </div>
-
-      {/* Stats */}
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-slate-400">Total Contests</p>
-                <p className="mt-2 text-3xl font-bold text-white">{contests.length}</p>
-              </div>
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500/20">
-                <Trophy className="h-6 w-6 text-emerald-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-slate-400">Registered</p>
-                <p className="mt-2 text-3xl font-bold text-white">
-                  {contests.filter((c) => c.registered).length}
-                </p>
-              </div>
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-500/20">
-                <CheckCircle className="h-6 w-6 text-blue-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-slate-400">Best Rank</p>
-                <p className="mt-2 text-3xl font-bold text-white">
-                  #{contests.filter((c) => c.myRank).sort((a, b) => a.myRank - b.myRank)[0]?.myRank || "-"}
-                </p>
-              </div>
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-yellow-500/20">
-                <Award className="h-6 w-6 text-yellow-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-slate-400">Average Score</p>
-                <p className="mt-2 text-3xl font-bold text-white">
-                  {Math.round(
-                    contests
-                      .filter((c) => c.myScore)
-                      .reduce((acc, c) => acc + c.myScore, 0) /
-                      contests.filter((c) => c.myScore).length
-                  ) || 0}%
-                </p>
-              </div>
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-purple-500/20">
-                <Trophy className="h-6 w-6 text-purple-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
       </div>
 
       {/* Filters */}
@@ -194,141 +132,110 @@ function StudentContests() {
                 />
               </div>
             </div>
-            <div className="min-w-[150px]">
-              <Select
-                value={selectedStatus}
-                onChange={(e) => setSelectedStatus(e.target.value)}
-              >
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="Upcoming">Upcoming</SelectItem>
-                <SelectItem value="Active">Active</SelectItem>
-                <SelectItem value="Completed">Completed</SelectItem>
-              </Select>
-            </div>
           </div>
         </CardContent>
       </Card>
 
       {/* Contests List */}
       <div className="space-y-4">
-        {filteredContests.map((contest) => (
-          <Card
-            key={contest.id}
-            className={`transition ${
-              contest.status === "Active"
-                ? "border-emerald-500/50 bg-emerald-500/5"
-                : "hover:border-emerald-500/50"
-            }`}
-          >
-            <CardContent className="p-6">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    <h3 className="text-lg font-semibold text-white">
-                      {contest.name}
-                    </h3>
-                    <Badge
-                      variant={
-                        contest.status === "Upcoming"
-                          ? "success"
-                          : contest.status === "Active"
-                          ? "warning"
-                          : "secondary"
-                      }
-                    >
-                      {contest.status}
-                    </Badge>
-                    {contest.registered && (
-                      <Badge variant="info">Registered</Badge>
-                    )}
-                  </div>
-                  <p className="text-sm text-slate-400 mb-4">
-                    {contest.description}
-                  </p>
+        {loading ? (
+          <p className="text-slate-400">Loading contests...</p>
+        ) : filteredContests.length === 0 ? (
+          <p className="text-slate-500">No contests available.</p>
+        ) : (
+          filteredContests.map((contest) => {
+            const isRegistered = !!registrations[contest.id];
+            const startTimeDate = new Date(contest.startTime);
+            const endTimeDate = new Date(contest.endTime);
+            const now = new Date();
 
-                  <div className="flex flex-wrap gap-4 text-sm text-slate-300">
-                    <div className="flex items-center gap-2">
-                      <Calendar className="h-4 w-4 text-emerald-400" />
-                      <span>{contest.startTime}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Clock className="h-4 w-4 text-blue-400" />
-                      <span>{contest.duration}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Trophy className="h-4 w-4 text-purple-400" />
-                      <span>{contest.questions} questions</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Users className="h-4 w-4 text-yellow-400" />
-                      <span>{contest.participants} participants</span>
-                    </div>
-                  </div>
-                </div>
+            const isUpcoming = startTimeDate > now;
+            const isActive = startTimeDate <= now && endTimeDate >= now;
+            const isCompleted = endTimeDate < now;
 
-                {contest.status === "Completed" && contest.myRank ? (
-                  <div className="text-right">
-                    <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
-                      <p className="text-sm text-emerald-400">Your Rank</p>
-                      <p className="text-3xl font-bold text-emerald-400">
-                        #{contest.myRank}
-                      </p>
-                      <p className="text-xs text-slate-400">
-                        Score: {contest.myScore}%
-                      </p>
-                    </div>
-                  </div>
-                ) : contest.status === "Upcoming" && contest.registered ? (
-                  <div className="text-right">
-                    <div className="rounded-xl border border-blue-500/30 bg-blue-500/10 p-4">
-                      <p className="text-sm text-blue-400">Starting In</p>
-                      <p className="text-2xl font-bold text-blue-400">
-                        {getTimeRemaining(contest.startTime)}
-                      </p>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
+            const statusText = isUpcoming ? "Upcoming" : isActive ? "Active" : "Completed";
 
-              <div className="mt-4 flex items-center justify-between">
-                {contest.status === "Active" ? (
-                  <Link
-                    to={`/student/contest/${contest.id}/solve`}
-                    className="flex items-center gap-2 rounded-xl bg-emerald-500 px-6 py-3 font-semibold text-black transition hover:bg-emerald-400"
-                  >
-                    <Play className="h-4 w-4" />
-                    Join Contest
-                  </Link>
-                ) : contest.status === "Upcoming" ? (
-                  contest.registered ? (
-                    <div className="flex items-center gap-2 text-sm text-emerald-400">
-                      <CheckCircle className="h-4 w-4" />
-                      <span>You're registered</span>
+            return (
+              <Card
+                key={contest.id}
+                className={`transition ${
+                  isActive ? "border-emerald-500/50 bg-emerald-500/5" : "hover:border-emerald-500/50"
+                }`}
+              >
+                <CardContent className="p-6">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <h3 className="text-lg font-semibold text-white">
+                          {contest.title || contest.name}
+                        </h3>
+                        <Badge
+                          variant={
+                            isUpcoming ? "info" : isActive ? "warning" : "secondary"
+                          }
+                        >
+                          {statusText}
+                        </Badge>
+                        {isRegistered && <Badge variant="success">Registered</Badge>}
+                      </div>
+                      <p className="text-sm text-slate-400 mb-4">
+                        {contest.description}
+                      </p>
+
+                      <div className="flex flex-wrap gap-4 text-sm text-slate-300">
+                        <div className="flex items-center gap-2">
+                          <Calendar className="h-4 w-4 text-emerald-400" />
+                          <span>Start: {startTimeDate.toLocaleString()}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Clock className="h-4 w-4 text-blue-400" />
+                          <span>End: {endTimeDate.toLocaleString()}</span>
+                        </div>
+                      </div>
                     </div>
-                  ) : (
-                    <button className="flex items-center gap-2 rounded-xl bg-emerald-500 px-6 py-3 font-semibold text-black transition hover:bg-emerald-400">
-                      <Trophy className="h-4 w-4" />
-                      Register Now
-                    </button>
-                  )
-                ) : (
-                  <Link
-                    to={`/student/contest/${contest.id}/results`}
-                    className="text-sm text-emerald-400 hover:underline"
-                  >
-                    View Results
-                  </Link>
-                )}
-                <Link
-                  to={`/student/contest/${contest.id}/leaderboard`}
-                  className="text-sm text-emerald-400 hover:underline"
-                >
-                  View Leaderboard
-                </Link>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+
+                    <div className="flex flex-col items-end gap-3">
+                      {isCompleted ? (
+                        <span className="text-sm text-slate-500 font-semibold">Ended</span>
+                      ) : isUpcoming ? (
+                        isRegistered ? (
+                          <div className="flex items-center gap-2 text-sm text-emerald-400">
+                            <CheckCircle className="h-4 w-4" />
+                            <span>Registered</span>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => handleRegister(contest.id)}
+                            className="flex items-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-500 px-6 py-2.5 font-semibold text-white transition cursor-pointer"
+                          >
+                            Register Now
+                          </button>
+                        )
+                      ) : isActive ? (
+                        isRegistered ? (
+                          <button
+                            onClick={() => handleStartContest(contest.id)}
+                            className="flex items-center gap-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 px-6 py-2.5 font-semibold text-black transition cursor-pointer"
+                          >
+                            <Play className="h-4 w-4" />
+                            Start Contest
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleRegister(contest.id)}
+                            className="flex items-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-500 px-6 py-2.5 font-semibold text-white transition cursor-pointer"
+                          >
+                            Register & Join
+                          </button>
+                        )
+                      ) : null}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })
+        )}
       </div>
     </div>
   );

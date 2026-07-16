@@ -18,32 +18,46 @@ import {
   ArrowRight,
 } from "lucide-react";
 
+import { useState, useEffect } from "react";
+import api from "@/services/api";
+
 function AdminDashboard() {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchDashboard = async () => {
+      try {
+        const res = await api.get("/dashboard/admin");
+        setData(res.data.data);
+      } catch (err) {
+        console.error("Error loading admin dashboard", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchDashboard();
+  }, []);
+
   const platformStats = [
-    { label: "Total Teachers", value: 45, icon: Users, color: "emerald" },
-    { label: "Total Students", value: 1234, icon: GraduationCap, color: "blue" },
-    { label: "Pending Approvals", value: 12, icon: Shield, color: "yellow" },
-    { label: "Total Questions", value: 567, icon: BookOpen, color: "purple" },
+    { label: "Total Teachers", value: data?.analytics?.totalTeachers || 0, icon: Users, color: "emerald" },
+    { label: "Total Students", value: data?.analytics?.totalStudents || 0, icon: GraduationCap, color: "blue" },
+    { label: "Pending Approvals", value: data?.pendingTeachersApprovalCount || 0, icon: Shield, color: "yellow" },
+    { label: "Total Questions", value: data?.analytics?.totalQuestions || 0, icon: BookOpen, color: "purple" },
   ];
 
-  const pendingApprovals = [
-    { id: 1, name: "Dr. Sarah Wilson", email: "sarah@university.edu", department: "Computer Science", requestedAt: "2 hours ago" },
-    { id: 2, name: "Prof. John Davis", email: "john@college.edu", department: "Software Engineering", requestedAt: "5 hours ago" },
-    { id: 3, name: "Dr. Emily Brown", email: "emily@institute.edu", department: "Web Development", requestedAt: "1 day ago" },
-  ];
+  const pendingApprovals = (data?.pendingTeachersList || []).map(t => ({
+    id: t.id,
+    name: t.username,
+    email: t.email,
+    department: "Computer Science",
+    requestedAt: "Recently"
+  }));
 
-  const recentActivity = [
-    { id: 1, action: "New teacher registered", details: "Dr. Sarah Wilson", time: "2 hours ago", type: "info" },
-    { id: 2, action: "Question bank updated", details: "50 new questions added", time: "5 hours ago", type: "success" },
-    { id: 3, action: "Contest completed", details: "React Challenge - 234 participants", time: "1 day ago", type: "success" },
-    { id: 4, action: "System alert", details: "High AI usage detected", time: "2 days ago", type: "warning" },
-  ];
+  const recentActivity = [];
 
   const departmentStats = [
-    { name: "Computer Science", students: 456, teachers: 18, growth: "+12%" },
-    { name: "Software Engineering", students: 378, teachers: 15, growth: "+8%" },
-    { name: "Web Development", students: 234, teachers: 8, growth: "+15%" },
-    { name: "Data Science", students: 166, teachers: 4, growth: "+20%" },
+    { name: "Computer Science", students: data?.analytics?.totalStudents || 0, teachers: data?.analytics?.totalTeachers || 0, growth: "+10%" },
   ];
 
   return (

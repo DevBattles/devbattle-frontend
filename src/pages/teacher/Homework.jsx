@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/Input";
 import { Select, SelectItem } from "@/components/ui/Select";
 import { Modal } from "@/components/ui/Modal";
+import toast from "react-hot-toast";
+import api from "@/services/api";
 import {
   Plus,
   Search,
@@ -22,68 +24,155 @@ function TeacherHomework() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("all");
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  const homework = [
-    {
-      id: 1,
-      title: "React Portfolio",
-      description: "Build a professional portfolio website using React with modern design principles",
-      dueDate: "2024-01-20",
-      difficulty: "Medium",
-      assignedTo: "Batch A",
-      submissions: 45,
-      totalStudents: 50,
-      status: "Active",
-      createdAt: "2024-01-10",
-    },
-    {
-      id: 2,
-      title: "E-commerce API",
-      description: "Create a RESTful API for an e-commerce platform using Node.js and Express",
-      dueDate: "2024-01-22",
-      difficulty: "Hard",
-      assignedTo: "Batch B",
-      submissions: 32,
-      totalStudents: 48,
-      status: "Active",
-      createdAt: "2024-01-12",
-    },
-    {
-      id: 3,
-      title: "Netflix Clone",
-      description: "Build a Netflix-like streaming interface with React and API integration",
-      dueDate: "2024-01-15",
-      difficulty: "Hard",
-      assignedTo: "Batch A",
-      submissions: 50,
-      totalStudents: 50,
-      status: "Completed",
-      createdAt: "2024-01-05",
-    },
-    {
-      id: 4,
-      title: "Responsive Landing Page",
-      description: "Design and build a beautiful landing page with responsive design",
-      dueDate: "2024-01-25",
-      difficulty: "Easy",
-      assignedTo: "Batch C",
-      submissions: 12,
-      totalStudents: 45,
-      status: "Active",
-      createdAt: "2024-01-14",
-    },
-  ];
+  // Lists fetched from backend
+  const [homeworkList, setHomeworkList] = useState([]);
+  const [questionsList, setQuestionsList] = useState([]);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const filteredHomework = homework.filter((hw) => {
-    const matchesSearch =
-      hw.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      hw.description.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus =
-      selectedStatus === "all" || hw.status === selectedStatus;
-    return matchesSearch && matchesStatus;
-  });
+  // Homework creation fields
+  const [homeworkTitle, setHomeworkTitle] = useState("");
+  const [homeworkDescription, setHomeworkDescription] = useState("");
+  const [dueDate, setDueDate] = useState("");
+  const [assignedBatch, setAssignedBatch] = useState("Batch A");
+  
+  // Question source: "existing" | "new"
+  const [questionSource, setQuestionSource] = useState("existing");
+  
+  // Existing question selection
+  const [selectedQuestionId, setSelectedQuestionId] = useState("");
+
+  // Custom question fields
+  const [questionTitle, setQuestionTitle] = useState("");
+  const [questionDescription, setQuestionDescription] = useState("");
+  const [questionDifficulty, setQuestionDifficulty] = useState("easy");
+  const [questionTech, setQuestionTech] = useState("HTML");
+  const [questionTags, setQuestionTags] = useState("");
+  const [questionRequirements, setQuestionRequirements] = useState("");
+  const [questionStarterCode, setQuestionStarterCode] = useState("<!-- Starter HTML Code -->");
+  const [questionExpectedOutput, setQuestionExpectedOutput] = useState("");
+  const [addToQuestionBank, setAddToQuestionBank] = useState(true);
 
   const batches = ["Batch A", "Batch B", "Batch C", "Batch D"];
+
+  const fetchHomeworkAndQuestions = async () => {
+    try {
+      setLoading(true);
+      const [hwRes, qRes] = await Promise.all([
+        api.get("/homework"),
+        api.get("/questions")
+      ]);
+      setHomeworkList(hwRes.data.data?.data || []);
+      setQuestionsList(qRes.data.data?.data || []);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to load homework or question bank.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchHomeworkAndQuestions();
+  }, []);
+
+  const handleCreateHomework = async () => {
+    if (!homeworkTitle.trim() || !dueDate) {
+      toast.error("Please fill in the homework title and due date.");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      let finalQuestionId = selectedQuestionId;
+
+      if (questionSource === "new") {
+        if (!questionTitle.trim() || !questionDescription.trim()) {
+          toast.error("Please fill in custom question details.");
+          setIsSaving(false);
+          return;
+        }
+
+        const questionPayload = {
+          title: questionTitle,
+          description: questionDescription,
+          difficulty: questionDifficulty,
+          estimatedTime: "30 mins",
+          techStack: [questionTech],
+          tags: questionTags.split(",").map(t => t.trim()).filter(Boolean),
+          requirements: questionRequirements.split("\n").map(r => r.trim()).filter(Boolean),
+          starterFiles: { "index.html": { content: questionStarterCode } },
+          expectedOutput: questionExpectedOutput,
+          published: addToQuestionBank
+        };
+
+        const qRes = await api.post("/questions", questionPayload);
+        finalQuestionId = qRes.data.data.id;
+        
+        if (addToQuestionBank) {
+          await api.post(`/questions/${finalQuestionId}/publish`);
+        }
+      }
+
+      if (!finalQuestionId) {
+        toast.error("Please select or create a question.");
+        setIsSaving(false);
+        return;
+      }
+
+      const homeworkPayload = {
+        title: homeworkTitle,
+        description: homeworkDescription,
+        dueDate: new Date(dueDate).toISOString(),
+        questions: [finalQuestionId]
+      };
+
+      await api.post("/homework", homeworkPayload);
+      toast.success("Homework assignment created successfully!");
+      setIsCreateModalOpen(false);
+      
+      // Reset form
+      setHomeworkTitle("");
+      setHomeworkDescription("");
+      setDueDate("");
+      setQuestionTitle("");
+      setQuestionDescription("");
+      setQuestionStarterCode("<!-- Starter HTML Code -->");
+      setQuestionExpectedOutput("");
+      setSelectedQuestionId("");
+
+      fetchHomeworkAndQuestions();
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.message || "Failed to create homework assignment.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDeleteHomework = async (id) => {
+    if (!confirm("Are you sure you want to delete this homework assignment?")) return;
+    try {
+      await api.delete(`/homework/${id}`);
+      toast.success("Homework deleted successfully.");
+      fetchHomeworkAndQuestions();
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to delete homework.");
+    }
+  };
+
+  const filteredHomework = homeworkList.filter((hw) => {
+    const matchesSearch =
+      hw.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      hw.description?.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesStatus =
+      selectedStatus === "all" ||
+      (selectedStatus === "Active" && new Date(hw.dueDate) > new Date()) ||
+      (selectedStatus === "Completed" && new Date(hw.dueDate) <= new Date());
+    return matchesSearch && matchesStatus;
+  });
 
   return (
     <div className="space-y-6">
@@ -111,7 +200,7 @@ function TeacherHomework() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-slate-400">Total Homework</p>
-                <p className="mt-2 text-3xl font-bold text-white">{homework.length}</p>
+                <p className="mt-2 text-3xl font-bold text-white">{homeworkList.length}</p>
               </div>
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500/20">
                 <FileText className="h-6 w-6 text-emerald-400" />
@@ -126,7 +215,7 @@ function TeacherHomework() {
               <div>
                 <p className="text-sm text-slate-400">Active</p>
                 <p className="mt-2 text-3xl font-bold text-white">
-                  {homework.filter((hw) => hw.status === "Active").length}
+                  {homeworkList.filter((hw) => new Date(hw.dueDate) > new Date()).length}
                 </p>
               </div>
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-500/20">
@@ -140,9 +229,9 @@ function TeacherHomework() {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-slate-400">Total Submissions</p>
+                <p className="text-sm text-slate-400">Total Questions Linked</p>
                 <p className="mt-2 text-3xl font-bold text-white">
-                  {homework.reduce((acc, hw) => acc + hw.submissions, 0)}
+                  {questionsList.length}
                 </p>
               </div>
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-purple-500/20">
@@ -156,8 +245,10 @@ function TeacherHomework() {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-slate-400">Pending Reviews</p>
-                <p className="mt-2 text-3xl font-bold text-white">23</p>
+                <p className="text-sm text-slate-400">Completed Assignments</p>
+                <p className="mt-2 text-3xl font-bold text-white">
+                  {homeworkList.filter((hw) => new Date(hw.dueDate) <= new Date()).length}
+                </p>
               </div>
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-yellow-500/20">
                 <Calendar className="h-6 w-6 text-yellow-400" />
@@ -190,7 +281,6 @@ function TeacherHomework() {
                 <SelectItem value="all">All Status</SelectItem>
                 <SelectItem value="Active">Active</SelectItem>
                 <SelectItem value="Completed">Completed</SelectItem>
-                <SelectItem value="Draft">Draft</SelectItem>
               </Select>
             </div>
           </div>
@@ -199,90 +289,51 @@ function TeacherHomework() {
 
       {/* Homework List */}
       <div className="space-y-4">
-        {filteredHomework.map((hw) => (
-          <Card key={hw.id} className="transition hover:border-emerald-500/50">
-            <CardContent className="p-6">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    <h3 className="text-lg font-semibold text-white">
-                      {hw.title}
-                    </h3>
-                    <Badge
-                      variant={
-                        hw.difficulty === "Easy"
-                          ? "success"
-                          : hw.difficulty === "Medium"
-                          ? "warning"
-                          : "destructive"
-                      }
+        {loading ? (
+          <p className="text-slate-400">Loading homework assignments...</p>
+        ) : filteredHomework.length === 0 ? (
+          <p className="text-slate-500">No homework assignments found.</p>
+        ) : (
+          filteredHomework.map((hw) => (
+            <Card key={hw.id} className="transition hover:border-emerald-500/50">
+              <CardContent className="p-6">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <h3 className="text-lg font-semibold text-white">
+                        {hw.title}
+                      </h3>
+                      <Badge variant={new Date(hw.dueDate) > new Date() ? "success" : "secondary"}>
+                        {new Date(hw.dueDate) > new Date() ? "Active" : "Completed"}
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-slate-400 mb-4">{hw.description}</p>
+
+                    <div className="flex flex-wrap gap-4 text-sm text-slate-300">
+                      <div className="flex items-center gap-2">
+                        <Calendar className="h-4 w-4 text-emerald-400" />
+                        <span>Due: {new Date(hw.dueDate).toLocaleDateString()}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Users className="h-4 w-4 text-blue-400" />
+                        <span>{assignedBatch}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleDeleteHomework(hw.id)}
+                      className="rounded-lg p-2 text-slate-400 transition hover:bg-red-500/20 hover:text-red-400 cursor-pointer"
                     >
-                      {hw.difficulty}
-                    </Badge>
-                    <Badge
-                      variant={hw.status === "Active" ? "success" : "secondary"}
-                    >
-                      {hw.status}
-                    </Badge>
-                  </div>
-                  <p className="text-sm text-slate-400 mb-4">{hw.description}</p>
-
-                  <div className="flex flex-wrap gap-4 text-sm text-slate-300">
-                    <div className="flex items-center gap-2">
-                      <Calendar className="h-4 w-4 text-emerald-400" />
-                      <span>Due: {hw.dueDate}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Users className="h-4 w-4 text-blue-400" />
-                      <span>{hw.assignedTo}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <FileText className="h-4 w-4 text-purple-400" />
-                      <span>
-                        {hw.submissions}/{hw.totalStudents} submissions
-                      </span>
-                    </div>
+                      <Trash2 className="h-4 w-4" />
+                    </button>
                   </div>
                 </div>
-
-                <div className="flex gap-2">
-                  <Link
-                    to={`/teacher/homework/${hw.id}`}
-                    className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-800 hover:text-white"
-                  >
-                    <Edit className="h-4 w-4" />
-                  </Link>
-                  <button className="rounded-lg p-2 text-slate-400 transition hover:bg-red-500/20 hover:text-red-400">
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
-
-              <div className="mt-4 flex items-center justify-between">
-                <div className="flex-1 mr-4">
-                  <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
-                    <span>Submission Progress</span>
-                    <span>{Math.round((hw.submissions / hw.totalStudents) * 100)}%</span>
-                  </div>
-                  <div className="h-2 rounded-full bg-slate-700">
-                    <div
-                      className="h-2 rounded-full bg-emerald-400 transition-all"
-                      style={{
-                        width: `${(hw.submissions / hw.totalStudents) * 100}%`,
-                      }}
-                    />
-                  </div>
-                </div>
-                <Link
-                  to={`/teacher/homework/${hw.id}/submissions`}
-                  className="text-sm text-emerald-400 hover:underline"
-                >
-                  View Submissions
-                </Link>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+              </CardContent>
+            </Card>
+          ))
+        )}
       </div>
 
       {/* Create Homework Modal */}
@@ -292,17 +343,21 @@ function TeacherHomework() {
         title="Create New Homework"
         size="lg"
       >
-        <div className="space-y-4">
+        <div className="space-y-4 max-h-[80vh] overflow-y-auto pr-2">
           <div>
             <label className="mb-2 block text-sm text-slate-300">Title</label>
-            <Input placeholder="Enter homework title" />
+            <Input
+              value={homeworkTitle}
+              onChange={(e) => setHomeworkTitle(e.target.value)}
+              placeholder="Enter homework title"
+            />
           </div>
 
           <div>
-            <label className="mb-2 block text-sm text-slate-300">
-              Description
-            </label>
+            <label className="mb-2 block text-sm text-slate-300">Description</label>
             <textarea
+              value={homeworkDescription}
+              onChange={(e) => setHomeworkDescription(e.target.value)}
               placeholder="Enter homework description"
               className="w-full rounded-xl border border-slate-700 bg-[#0F172A] px-4 py-3 text-white outline-none focus:border-emerald-400 min-h-[100px]"
             />
@@ -310,32 +365,20 @@ function TeacherHomework() {
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <label className="mb-2 block text-sm text-slate-300">
-                Due Date
-              </label>
-              <Input type="date" />
+              <label className="mb-2 block text-sm text-slate-300">Due Date</label>
+              <Input
+                type="date"
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+              />
             </div>
 
             <div>
-              <label className="mb-2 block text-sm text-slate-300">
-                Difficulty
-              </label>
-              <Select>
-                <SelectItem value="">Select difficulty</SelectItem>
-                <SelectItem value="Easy">Easy</SelectItem>
-                <SelectItem value="Medium">Medium</SelectItem>
-                <SelectItem value="Hard">Hard</SelectItem>
-              </Select>
-            </div>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label className="mb-2 block text-sm text-slate-300">
-                Assign to Batch
-              </label>
-              <Select>
-                <SelectItem value="">Select batch</SelectItem>
+              <label className="mb-2 block text-sm text-slate-300">Assign to Batch</label>
+              <Select
+                value={assignedBatch}
+                onChange={(e) => setAssignedBatch(e.target.value)}
+              >
                 {batches.map((batch) => (
                   <SelectItem key={batch} value={batch}>
                     {batch}
@@ -343,29 +386,152 @@ function TeacherHomework() {
                 ))}
               </Select>
             </div>
+          </div>
 
-            <div>
-              <label className="mb-2 block text-sm text-slate-300">
-                Visibility
+          <hr className="border-slate-700" />
+
+          {/* Question Source Selection */}
+          <div>
+            <label className="mb-2 block text-sm text-slate-300 font-semibold">Question Source</label>
+            <div className="flex items-center gap-4">
+              <label className="flex items-center gap-2 cursor-pointer text-sm text-white">
+                <input
+                  type="radio"
+                  name="qSource"
+                  checked={questionSource === "existing"}
+                  onChange={() => setQuestionSource("existing")}
+                />
+                Choose Existing Question
               </label>
-              <Select>
-                <SelectItem value="public">Public</SelectItem>
-                <SelectItem value="private">Private</SelectItem>
-              </Select>
+              <label className="flex items-center gap-2 cursor-pointer text-sm text-white">
+                <input
+                  type="radio"
+                  name="qSource"
+                  checked={questionSource === "new"}
+                  onChange={() => setQuestionSource("new")}
+                />
+                Create New Custom Question
+              </label>
             </div>
           </div>
 
-          <div>
-            <label className="mb-2 block text-sm text-slate-300">
-              Select Question
-            </label>
-            <Select>
-              <SelectItem value="">Select from question bank</SelectItem>
-              <SelectItem value="1">React Portfolio</SelectItem>
-              <SelectItem value="2">E-commerce API</SelectItem>
-              <SelectItem value="3">Netflix Clone</SelectItem>
-            </Select>
-          </div>
+          {questionSource === "existing" ? (
+            <div>
+              <label className="mb-2 block text-sm text-slate-300">Select Question</label>
+              <Select
+                value={selectedQuestionId}
+                onChange={(e) => setSelectedQuestionId(e.target.value)}
+              >
+                <SelectItem value="">Select from question bank</SelectItem>
+                {questionsList.map((q) => (
+                  <SelectItem key={q.id} value={q.id}>
+                    {q.title} ({q.difficulty})
+                  </SelectItem>
+                ))}
+              </Select>
+            </div>
+          ) : (
+            <div className="space-y-4 border border-slate-700/50 bg-slate-800/30 p-4 rounded-xl">
+              <h3 className="text-sm font-semibold text-white">Custom Question Details</h3>
+              
+              <div>
+                <label className="mb-2 block text-xs text-slate-300">Question Title</label>
+                <Input
+                  value={questionTitle}
+                  onChange={(e) => setQuestionTitle(e.target.value)}
+                  placeholder="e.g. Implement Binary Search"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-xs text-slate-300">Question Description</label>
+                <textarea
+                  value={questionDescription}
+                  onChange={(e) => setQuestionDescription(e.target.value)}
+                  placeholder="Detail the instructions..."
+                  className="w-full rounded-xl border border-slate-700 bg-[#0F172A] px-4 py-3 text-white outline-none focus:border-emerald-400 min-h-[80px] text-sm"
+                />
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="mb-2 block text-xs text-slate-300">Difficulty</label>
+                  <Select
+                    value={questionDifficulty}
+                    onChange={(e) => setQuestionDifficulty(e.target.value)}
+                  >
+                    <SelectItem value="easy">Easy</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="hard">Hard</SelectItem>
+                  </Select>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-xs text-slate-300">Technology</label>
+                  <Select
+                    value={questionTech}
+                    onChange={(e) => setQuestionTech(e.target.value)}
+                  >
+                    <SelectItem value="HTML">HTML</SelectItem>
+                    <SelectItem value="CSS">CSS</SelectItem>
+                    <SelectItem value="JavaScript">JavaScript</SelectItem>
+                    <SelectItem value="React">React</SelectItem>
+                  </Select>
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-xs text-slate-300">Tags (comma separated)</label>
+                <Input
+                  value={questionTags}
+                  onChange={(e) => setQuestionTags(e.target.value)}
+                  placeholder="React, Hook, Frontend"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-xs text-slate-300">Requirements (one per line)</label>
+                <textarea
+                  value={questionRequirements}
+                  onChange={(e) => setQuestionRequirements(e.target.value)}
+                  placeholder="Should display list of items&#10;Should be responsive"
+                  className="w-full rounded-xl border border-slate-700 bg-[#0F172A] px-4 py-3 text-white outline-none focus:border-emerald-400 min-h-[60px] text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-xs text-slate-300">Starter Code (index.html)</label>
+                <textarea
+                  value={questionStarterCode}
+                  onChange={(e) => setQuestionStarterCode(e.target.value)}
+                  placeholder="Enter boilerplate code..."
+                  className="w-full font-mono rounded-xl border border-slate-700 bg-[#0F172A] px-4 py-3 text-white outline-none focus:border-emerald-400 min-h-[100px] text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-xs text-slate-300">Expected Output Keyword/Criteria</label>
+                <Input
+                  value={questionExpectedOutput}
+                  onChange={(e) => setQuestionExpectedOutput(e.target.value)}
+                  placeholder="Keyword to verify in evaluation"
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="addBank"
+                  checked={addToQuestionBank}
+                  onChange={(e) => setAddToQuestionBank(e.target.checked)}
+                  className="rounded"
+                />
+                <label htmlFor="addBank" className="text-xs text-slate-300 cursor-pointer">
+                  Add this Question to Question Bank (make public)
+                </label>
+              </div>
+            </div>
+          )}
 
           <div className="flex justify-end gap-3 pt-4">
             <Button
@@ -375,8 +541,12 @@ function TeacherHomework() {
             >
               Cancel
             </Button>
-            <Button className="bg-emerald-500 text-black hover:bg-emerald-400">
-              Create Homework
+            <Button
+              onClick={handleCreateHomework}
+              disabled={isSaving}
+              className="bg-emerald-500 text-black hover:bg-emerald-400"
+            >
+              {isSaving ? "Saving..." : "Create Homework"}
             </Button>
           </div>
         </div>

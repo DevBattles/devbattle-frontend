@@ -28,7 +28,7 @@ function ApproveTeachers() {
 
   const handleApprove = async (id) => {
     try {
-      await api.put(`/admin/teachers/${id}/approve`);
+      await api.put(`/admin/teachers/${id}/approve`, { isApproved: true });
       toast.success("Teacher account approved successfully!");
       fetchPendingTeachers();
     } catch (err) {

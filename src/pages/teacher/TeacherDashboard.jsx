@@ -15,31 +15,46 @@ import {
   Zap,
 } from "lucide-react";
 
+import { useState, useEffect } from "react";
+import api from "@/services/api";
+
 function TeacherDashboard() {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchDashboard = async () => {
+      try {
+        const res = await api.get("/dashboard/teacher");
+        setData(res.data.data);
+      } catch (err) {
+        console.error("Error loading teacher dashboard", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchDashboard();
+  }, []);
+
   const stats = [
-    { label: "Total Students", value: 156, icon: Users, color: "emerald" },
-    { label: "Active Students", value: 142, icon: UserCheck, color: "blue" },
-    { label: "Homework Created", value: 24, icon: FileText, color: "purple" },
-    { label: "Contests Created", value: 8, icon: Trophy, color: "yellow" },
+    { label: "Total Students", value: data?.totalStudents || 0, icon: Users, color: "emerald" },
+    { label: "Active Students", value: data?.totalStudents || 0, icon: UserCheck, color: "blue" },
+    { label: "Homework Created", value: data?.homeworkCreated || 0, icon: FileText, color: "purple" },
+    { label: "Contests Created", value: data?.contestsCreated || 0, icon: Trophy, color: "yellow" },
   ];
 
   const pendingReviews = [
-    { id: 1, student: "John Doe", assignment: "React Portfolio", submittedAt: "2 hours ago" },
-    { id: 2, student: "Jane Smith", assignment: "E-commerce API", submittedAt: "5 hours ago" },
-    { id: 3, student: "Mike Johnson", assignment: "Netflix Clone", submittedAt: "1 day ago" },
+    { id: 1, student: "Pending submissions", assignment: `${data?.pendingReviews || 0} items await review`, submittedAt: "Review now" },
   ];
 
-  const recentActivity = [
-    { id: 1, action: "Created homework", details: "React Portfolio", time: "2 hours ago" },
-    { id: 2, action: "Published contest", details: "React Challenge", time: "1 day ago" },
-    { id: 3, action: "Reviewed submission", details: "Todo App by John", time: "2 days ago" },
-  ];
+  const recentActivity = [];
 
-  const topPerformers = [
-    { rank: 1, name: "Alice Johnson", xp: 3450, submissions: 28 },
-    { rank: 2, name: "Bob Smith", xp: 3120, submissions: 25 },
-    { rank: 3, name: "Charlie Brown", xp: 2890, submissions: 23 },
-  ];
+  const topPerformers = (data?.leaderboard || []).map((item, index) => ({
+    rank: index + 1,
+    name: item.user.username,
+    xp: item.score * 10 || 0,
+    submissions: item.attempts || 0
+  }));
 
   return (
     <div className="space-y-6">

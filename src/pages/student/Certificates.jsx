@@ -80,18 +80,18 @@ function Certificates() {
               <div className="space-y-3 pt-4 border-t border-slate-700/50 text-xs">
                 <div className="flex justify-between text-slate-400">
                   <span>Validation Code:</span>
-                  <span className="font-mono text-white">{cert.code}</span>
+                  <span className="font-mono text-white">{cert.verificationCode}</span>
                 </div>
                 <div className="flex gap-2">
                   <button
-                    onClick={() => handleShare(cert.code)}
+                    onClick={() => handleShare(cert.verificationCode)}
                     className="flex-1 flex items-center justify-center gap-2 border border-slate-600 hover:bg-slate-800 text-white font-semibold py-2.5 rounded-lg transition"
                   >
                     <Share2 className="h-3.5 w-3.5" />
                     Copy Link
                   </button>
                   <a
-                    href={`${import.meta.env.VITE_API_URL}/certificates/download/${cert.code}`}
+                    href={`${import.meta.env.VITE_API_URL}/certificates/download/${cert.verificationCode}`}
                     target="_blank"
                     rel="noreferrer"
                     className="flex-1 flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-black font-bold py-2.5 rounded-lg transition text-center"

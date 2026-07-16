@@ -13,29 +13,34 @@ import {
   ArrowRight,
 } from "lucide-react";
 
+import { useState, useEffect } from "react";
+import api from "@/services/api";
+
 function StudentDashboard() {
-  const upcomingHomework = [
-    { id: 1, title: "React Portfolio", dueDate: "2024-01-20", difficulty: "Medium" },
-    { id: 2, title: "E-commerce API", dueDate: "2024-01-22", difficulty: "Hard" },
-    { id: 3, title: "Responsive Landing Page", dueDate: "2024-01-25", difficulty: "Easy" },
-  ];
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  const upcomingContests = [
-    { id: 1, name: "React Challenge", startTime: "2024-01-18 10:00", participants: 234 },
-    { id: 2, name: "Full Stack Sprint", startTime: "2024-01-21 14:00", participants: 156 },
-  ];
+  useEffect(() => {
+    const fetchDashboard = async () => {
+      try {
+        const res = await api.get("/dashboard/student");
+        setData(res.data.data);
+      } catch (err) {
+        console.error("Error loading student dashboard", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchDashboard();
+  }, []);
 
-  const recentSubmissions = [
-    { id: 1, title: "Todo App", score: 92, status: "Completed" },
-    { id: 2, title: "Weather Dashboard", score: 88, status: "Completed" },
-    { id: 3, title: "Netflix Clone", score: 95, status: "Completed" },
-  ];
+  const upcomingHomework = data?.upcomingHomework || [];
+  const upcomingContests = data?.upcomingContests || [];
+  const recentSubmissions = data?.recentSubmission ? [
+    { id: data.recentSubmission.id, title: "Recent Assignment", score: data.recentSubmission.score, status: data.recentSubmission.status }
+  ] : [];
+  const notifications = []; // Loaded dynamically if needed
 
-  const notifications = [
-    { id: 1, message: "New homework assigned: React Portfolio", time: "2 hours ago" },
-    { id: 2, message: "Your submission was reviewed", time: "5 hours ago" },
-    { id: 3, message: "Contest starting soon: React Challenge", time: "1 day ago" },
-  ];
 
   return (
     <div className="space-y-6">
@@ -77,7 +82,9 @@ function StudentDashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-slate-400">Question Bank Progress</p>
-                <p className="mt-2 text-3xl font-bold text-white">68%</p>
+                <p className="mt-2 text-3xl font-bold text-white">
+                  {data?.questionBankProgress?.percentage || 0}%
+                </p>
               </div>
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500/20">
                 <BookOpen className="h-6 w-6 text-emerald-400" />
@@ -91,7 +98,9 @@ function StudentDashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-slate-400">Leaderboard Position</p>
-                <p className="mt-2 text-3xl font-bold text-white">#12</p>
+                <p className="mt-2 text-3xl font-bold text-white">
+                  {data?.leaderboardPosition ? `#${data.leaderboardPosition}` : "Unranked"}
+                </p>
               </div>
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-yellow-500/20">
                 <Trophy className="h-6 w-6 text-yellow-400" />
@@ -105,7 +114,9 @@ function StudentDashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-slate-400">Certificates Earned</p>
-                <p className="mt-2 text-3xl font-bold text-white">5</p>
+                <p className="mt-2 text-3xl font-bold text-white">
+                  {data?.certificatesCount || 0}
+                </p>
               </div>
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-500/20">
                 <Award className="h-6 w-6 text-blue-400" />
@@ -119,7 +130,9 @@ function StudentDashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-slate-400">Total XP</p>
-                <p className="mt-2 text-3xl font-bold text-white">2,450</p>
+                <p className="mt-2 text-3xl font-bold text-white">
+                  {(data?.questionBankProgress?.solved || 0) * 100}
+                </p>
               </div>
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-purple-500/20">
                 <Zap className="h-6 w-6 text-purple-400" />

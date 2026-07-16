@@ -27,7 +27,7 @@ function ManageTeachers() {
 
   const toggleApproval = async (id, currentStatus) => {
     try {
-      await api.put(`/admin/teachers/${id}/approve`);
+      await api.put(`/admin/teachers/${id}/approve`, { isApproved: !currentStatus });
       toast.success(currentStatus ? "Approved status revoked" : "Teacher account approved!");
       fetchTeachers();
     } catch (err) {
