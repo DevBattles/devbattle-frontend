@@ -3,6 +3,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/Input";
 import { Select, SelectItem } from "@/components/ui/Select";
+import api from "@/services/api";
 import {
   Send,
   Bot,
@@ -59,21 +60,56 @@ function AIChat() {
       timestamp: new Date(),
     };
 
-    setMessages((prev) => [...prev, userMessage]);
+    const newMessages = [...messages, userMessage];
+    setMessages(newMessages);
     setInput("");
     setIsTyping(true);
 
-    // Simulate AI response
-    setTimeout(() => {
+    try {
+      const chatHistory = messages
+        .filter((m) => m.id !== 1)
+        .map((m) => ({
+          role: m.role === "assistant" ? "model" : "user",
+          content: m.content,
+        }));
+
+      const payload = {
+        currentRole: "student",
+        currentQuestion: {
+          title: selectedTopic,
+          description: `General coding query about ${selectedTopic}.`,
+        },
+        currentContext: {
+          type: "chat",
+          isActive: true,
+        },
+        chatHistory,
+        message: input,
+      };
+
+      const response = await api.post("/ai/mentor/chat", payload);
+      const resData = response.data?.data || response.data;
+
       const aiResponse = {
-        id: messages.length + 2,
+        id: newMessages.length + 1,
+        role: "assistant",
+        content: resData.response || resData.text || "Sorry, I could not generate an answer.",
+        timestamp: new Date(),
+      };
+
+      setMessages((prev) => [...prev, aiResponse]);
+    } catch (err) {
+      console.warn("AI Backend request failed. Falling back to mock generator.", err);
+      const aiResponse = {
+        id: newMessages.length + 1,
         role: "assistant",
         content: generateAIResponse(input, selectedTopic),
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, aiResponse]);
+    } finally {
       setIsTyping(false);
-    }, 1500);
+    }
   };
 
   const generateAIResponse = (userInput, topic) => {
