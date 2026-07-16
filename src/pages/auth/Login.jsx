@@ -7,7 +7,7 @@ import toast from "react-hot-toast";
 
 function Login() {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, getDashboardPath } = useAuth();
 
   const [formData, setFormData] = useState({
     email: "",
@@ -37,12 +37,12 @@ function Login() {
 
 toast.success("Login Successful!");
 
-navigate("/dashboard");
+navigate(getDashboardPath());
     } catch (err) {
         const message =
         err.response?.data?.message ||
         "Invalid email or password.";
-      
+
       setError(message);
       toast.error(message);
     } finally {

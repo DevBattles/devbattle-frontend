@@ -35,6 +35,20 @@ export function AuthProvider({ children }) {
     setToken(null);
   };
 
+  const getDashboardPath = () => {
+    if (!user) return "/login";
+    switch (user.role) {
+      case "student":
+        return "/student/dashboard";
+      case "teacher":
+        return "/teacher/dashboard";
+      case "admin":
+        return "/admin/dashboard";
+      default:
+        return "/login";
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -44,6 +58,7 @@ export function AuthProvider({ children }) {
         login,
         logout,
         isAuthenticated: !!token,
+        getDashboardPath,
       }}
     >
       {children}
