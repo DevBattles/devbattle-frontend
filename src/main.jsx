@@ -12,7 +12,6 @@ ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <BrowserRouter>
       <AuthProvider>
-
         <Toaster
           position="top-right"
           toastOptions={{
@@ -26,7 +25,6 @@ ReactDOM.createRoot(document.getElementById("root")).render(
         />
 
         <App />
-
       </AuthProvider>
     </BrowserRouter>
   </React.StrictMode>

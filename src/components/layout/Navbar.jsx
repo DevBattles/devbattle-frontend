@@ -10,7 +10,7 @@ import { useAuth } from "@/context/AuthContext";
 
 function Navbar() {
   const navigate = useNavigate();
-  const { isAuthenticated, logout, user } = useAuth();
+  const { isAuthenticated, logout, user, getDashboardPath } = useAuth();
 
   const [isOpen, setIsOpen] = useState(false);
 
@@ -61,7 +61,7 @@ function Navbar() {
                   </span>
 
                   <Button
-                    onClick={() => navigate("/dashboard")}
+                    onClick={() => navigate(getDashboardPath())}
                     variant="outline"
                     className="border-emerald-500 text-emerald-400 hover:bg-emerald-500 hover:text-black"
                   >
@@ -148,7 +148,7 @@ function Navbar() {
                 <Button
                   onClick={() => {
                     closeMenu();
-                    navigate("/dashboard");
+                    navigate(getDashboardPath());
                   }}
                   className="bg-emerald-500 text-black hover:bg-emerald-400"
                 >
