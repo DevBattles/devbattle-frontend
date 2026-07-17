@@ -51,7 +51,7 @@ function StudentDashboard() {
             Welcome back, Student! 👋
           </h1>
           <p className="text-slate-300">
-            You have 3 pending homework and 2 upcoming contests this week.
+            You have {upcomingHomework.length} pending homework and {upcomingContests.length} upcoming contests this week.
           </p>
           <div className="mt-6 flex gap-4">
             <Link

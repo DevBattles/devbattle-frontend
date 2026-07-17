@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/Input";
@@ -17,6 +18,9 @@ import {
 } from "lucide-react";
 
 function AIChat() {
+  const [searchParams] = useSearchParams();
+  const questionIdParam = searchParams.get("questionId");
+  const [activeQuestion, setActiveQuestion] = useState(null);
   const [messages, setMessages] = useState([
     {
       id: 1,
@@ -47,6 +51,30 @@ function AIChat() {
   };
 
   useEffect(() => {
+    if (questionIdParam) {
+      const fetchQuestion = async () => {
+        try {
+          const res = await api.get(`/questions/${questionIdParam}`);
+          const q = res.data.data;
+          setActiveQuestion(q);
+          setSelectedTopic("Question Help");
+          setMessages([
+            {
+              id: 1,
+              role: "assistant",
+              content: `Hello! I see you are working on the challenge "${q.title}" (${q.category || q.difficulty}). I am locked onto this challenge context. Ask me for hints, concept explanations, or bugs in your current code, and I will guide you!`,
+              timestamp: new Date(),
+            }
+          ]);
+        } catch (err) {
+          console.error("Failed to load question details for chat", err);
+        }
+      };
+      fetchQuestion();
+    }
+  }, [questionIdParam]);
+
+  useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
@@ -75,12 +103,20 @@ function AIChat() {
 
       const payload = {
         currentRole: "student",
-        currentQuestion: {
+        currentQuestion: activeQuestion ? {
+          id: activeQuestion.id,
+          title: activeQuestion.title,
+          description: activeQuestion.description,
+          category: activeQuestion.category,
+          difficulty: activeQuestion.difficulty,
+          requirements: activeQuestion.requirements,
+          starterFiles: activeQuestion.starterFiles
+        } : {
           title: selectedTopic,
           description: `General coding query about ${selectedTopic}.`,
         },
         currentContext: {
-          type: "chat",
+          type: activeQuestion ? "practice" : "chat",
           isActive: true,
         },
         chatHistory,
@@ -99,11 +135,12 @@ function AIChat() {
 
       setMessages((prev) => [...prev, aiResponse]);
     } catch (err) {
-      console.warn("AI Backend request failed. Falling back to mock generator.", err);
+      console.warn("AI Backend request failed.", err);
+      const errorMsg = err.response?.data?.error?.details || err.response?.data?.message || err.message || "Failed to reach AI Backend";
       const aiResponse = {
         id: newMessages.length + 1,
         role: "assistant",
-        content: generateAIResponse(input, selectedTopic),
+        content: `Error: ${errorMsg}`,
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, aiResponse]);
@@ -270,19 +307,25 @@ function AIChat() {
         {/* Input Area */}
         <div className="border-t border-slate-700 p-4">
           <div className="mb-3 flex flex-wrap gap-2">
-            {topics.map((topic) => (
-              <button
-                key={topic}
-                onClick={() => setSelectedTopic(topic)}
-                className={`rounded-full px-3 py-1 text-xs font-medium transition ${
-                  selectedTopic === topic
-                    ? "bg-emerald-500 text-black"
-                    : "bg-slate-800/50 text-slate-300 hover:bg-slate-800"
-                }`}
-              >
-                {topic.charAt(0).toUpperCase() + topic.slice(1).replace("-", " ")}
-              </button>
-            ))}
+            {activeQuestion ? (
+              <span className="rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-3 py-1 text-xs font-semibold select-none">
+                Locked Challenge Mode: {activeQuestion.title}
+              </span>
+            ) : (
+              topics.map((topic) => (
+                <button
+                  key={topic}
+                  onClick={() => setSelectedTopic(topic)}
+                  className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                    selectedTopic === topic
+                      ? "bg-emerald-500 text-black"
+                      : "bg-slate-800/50 text-slate-300 hover:bg-slate-800"
+                  }`}
+                >
+                  {topic.charAt(0).toUpperCase() + topic.slice(1).replace("-", " ")}
+                </button>
+              ))
+            )}
           </div>
           <div className="flex gap-3">
             <div className="flex-1">

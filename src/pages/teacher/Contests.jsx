@@ -30,6 +30,7 @@ function TeacherContests() {
   // Loaded database lists
   const [contestsList, setContestsList] = useState([]);
   const [questionsList, setQuestionsList] = useState([]);
+  const [batchesList, setBatchesList] = useState([]);
   const [isSaving, setIsSaving] = useState(false);
 
   // Contest Form fields
@@ -37,6 +38,7 @@ function TeacherContests() {
   const [contestDescription, setContestDescription] = useState("");
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
+  const [contestBatch, setContestBatch] = useState("");
   const [publishImmediately, setPublishImmediately] = useState(true);
 
   // Selected questions mapping: { [questionId]: { points: 100, order: 1 } }
@@ -56,15 +58,17 @@ function TeacherContests() {
   const fetchContestsAndQuestions = async () => {
     try {
       setLoading(true);
-      const [contestsRes, qRes] = await Promise.all([
+      const [contestsRes, qRes, batchesRes] = await Promise.all([
         api.get("/contests"),
-        api.get("/questions")
+        api.get("/questions"),
+        api.get("/batches")
       ]);
       setContestsList(contestsRes.data.data?.data || contestsRes.data.data || []);
       setQuestionsList(qRes.data.data?.data || []);
+      setBatchesList(batchesRes.data.data || []);
     } catch (err) {
       console.error(err);
-      toast.error("Failed to load contests or question bank.");
+      toast.error("Failed to load contests, question bank or batches.");
     } finally {
       setLoading(false);
     }
@@ -179,7 +183,8 @@ function TeacherContests() {
         startTime: new Date(startTime).toISOString(),
         endTime: new Date(endTime).toISOString(),
         published: publishImmediately,
-        questions: questionsPayload
+        questions: questionsPayload,
+        batch: contestBatch || null
       };
 
       await api.post("/contests", contestPayload);
@@ -191,6 +196,7 @@ function TeacherContests() {
       setContestDescription("");
       setStartTime("");
       setEndTime("");
+      setContestBatch("");
       setSelectedQuestions({});
 
       fetchContestsAndQuestions();
@@ -388,6 +394,21 @@ function TeacherContests() {
                 onChange={(e) => setEndTime(e.target.value)}
               />
             </div>
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm text-slate-300">Assign to Batch (Optional)</label>
+            <Select
+              value={contestBatch}
+              onChange={(e) => setContestBatch(e.target.value)}
+            >
+              <SelectItem value="">All Batches (Public)</SelectItem>
+              {batchesList.map((batch) => (
+                <SelectItem key={batch.id} value={batch.name}>
+                  {batch.name}
+                </SelectItem>
+              ))}
+            </Select>
           </div>
 
           <hr className="border-slate-700" />

@@ -35,7 +35,7 @@ function TeacherHomework() {
   const [homeworkTitle, setHomeworkTitle] = useState("");
   const [homeworkDescription, setHomeworkDescription] = useState("");
   const [dueDate, setDueDate] = useState("");
-  const [assignedBatch, setAssignedBatch] = useState("Batch A");
+  const [assignedBatch, setAssignedBatch] = useState("");
   
   // Question source: "existing" | "new"
   const [questionSource, setQuestionSource] = useState("existing");
@@ -54,20 +54,22 @@ function TeacherHomework() {
   const [questionExpectedOutput, setQuestionExpectedOutput] = useState("");
   const [addToQuestionBank, setAddToQuestionBank] = useState(true);
 
-  const batches = ["Batch A", "Batch B", "Batch C", "Batch D"];
+  const [batchesList, setBatchesList] = useState([]);
 
   const fetchHomeworkAndQuestions = async () => {
     try {
       setLoading(true);
-      const [hwRes, qRes] = await Promise.all([
+      const [hwRes, qRes, batchesRes] = await Promise.all([
         api.get("/homework"),
-        api.get("/questions")
+        api.get("/questions"),
+        api.get("/batches")
       ]);
-      setHomeworkList(hwRes.data.data?.data || []);
+      setHomeworkList(hwRes.data.data?.data || hwRes.data.data || []);
       setQuestionsList(qRes.data.data?.data || []);
+      setBatchesList(batchesRes.data.data || []);
     } catch (err) {
       console.error(err);
-      toast.error("Failed to load homework or question bank.");
+      toast.error("Failed to load homework, questions or student batches.");
     } finally {
       setLoading(false);
     }
@@ -128,8 +130,16 @@ function TeacherHomework() {
         questions: [finalQuestionId]
       };
 
-      await api.post("/homework", homeworkPayload);
-      toast.success("Homework assignment created successfully!");
+      const hwRes = await api.post("/homework", homeworkPayload);
+      const newHomework = hwRes.data.data;
+
+      if (assignedBatch) {
+        await api.post(`/homework/${newHomework.id}/assign`, {
+          batch: assignedBatch
+        });
+      }
+
+      toast.success("Homework assignment created successfully and assigned to " + assignedBatch + "!");
       setIsCreateModalOpen(false);
       
       // Reset form
@@ -379,9 +389,10 @@ function TeacherHomework() {
                 value={assignedBatch}
                 onChange={(e) => setAssignedBatch(e.target.value)}
               >
-                {batches.map((batch) => (
-                  <SelectItem key={batch} value={batch}>
-                    {batch}
+                <SelectItem value="">Select Batch...</SelectItem>
+                {batchesList.map((batch) => (
+                  <SelectItem key={batch.id} value={batch.name}>
+                    {batch.name}
                   </SelectItem>
                 ))}
               </Select>

@@ -35,6 +35,7 @@ import TeacherHomework from "@/pages/teacher/Homework";
 import TeacherContests from "@/pages/teacher/Contests";
 import Submissions from "@/pages/teacher/Submissions";
 import Analytics from "@/pages/teacher/Analytics";
+import TeacherBatches from "@/pages/teacher/Batches";
 
 // Admin Pages
 import AdminDashboard from "@/pages/admin/AdminDashboard";
@@ -166,6 +167,7 @@ function AppRouter() {
         <Route path="homework" element={<TeacherHomework />} />
         <Route path="contests" element={<TeacherContests />} />
         <Route path="submissions" element={<Submissions />} />
+        <Route path="batches" element={<TeacherBatches />} />
         <Route path="leaderboard" element={<StudentLeaderboard />} />
         <Route path="analytics" element={<Analytics />} />
         <Route path="profile" element={<Profile />} />

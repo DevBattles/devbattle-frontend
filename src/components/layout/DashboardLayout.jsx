@@ -46,6 +46,7 @@ function DashboardLayout() {
     { icon: FileText, label: "Homework", path: "/teacher/homework" },
     { icon: Trophy, label: "Contests", path: "/teacher/contests" },
     { icon: ClipboardList, label: "Submissions", path: "/teacher/submissions" },
+    { icon: Users, label: "Manage Batches", path: "/teacher/batches" },
     { icon: Trophy, label: "Leaderboard", path: "/teacher/leaderboard" },
     { icon: BarChart3, label: "Analytics", path: "/teacher/analytics" },
     { icon: User, label: "Profile", path: "/teacher/profile" },
