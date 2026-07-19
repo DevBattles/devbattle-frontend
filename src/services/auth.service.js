@@ -1,0 +1,36 @@
+import api from "./api";
+
+export const loginUser = async (credentials) => {
+  const response = await api.post("/auth/login", credentials);
+  return response.data;
+};
+
+export const registerUser = async (userData) => {
+  const response = await api.post("/auth/signup", userData);
+  return response.data;
+};
+
+export const verifyOtp = async (email, otp) => {
+  const response = await api.post("/auth/verify-otp", { email, otp });
+  return response.data;
+};
+
+export const resendOtp = async (email) => {
+  const response = await api.post("/auth/resend-otp", { email });
+  return response.data;
+};
+
+export const googleLogin = async (token) => {
+  const response = await api.post("/auth/google", { token });
+  return response.data;
+};
+
+export const getMe = async () => {
+  const response = await api.get("/auth/me");
+  return response.data;
+};
+
+export const logoutUser = async () => {
+  const response = await api.post("/auth/logout");
+  return response.data;
+};
