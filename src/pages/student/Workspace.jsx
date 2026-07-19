@@ -408,6 +408,10 @@ function Workspace() {
 
     let fullHtml = html;
 
+    // Strip external links/scripts to style.css and script.js to prevent 404 console errors in iframe
+    fullHtml = fullHtml.replace(/<link[^>]*href=["']\s*(\.\/)?style\.css\s*["'][^>]*>/gi, '');
+    fullHtml = fullHtml.replace(/<script[^>]*src=["']\s*(\.\/)?script\.js\s*["'][^>]*><\/script>/gi, '');
+
     // Inject error script first
     if (fullHtml.includes("<head>")) {
       fullHtml = fullHtml.replace("<head>", `<head>${errorScript}`);

@@ -15,6 +15,10 @@ import {
   Building,
   Loader2,
   UserPlus,
+  Copy,
+  RefreshCw,
+  Eye,
+  UserMinus,
 } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -26,6 +30,7 @@ function TeacherBatches() {
   const [selectedDeptId, setSelectedDeptId] = useState("");
   const [activeTab, setActiveTab] = useState("list");
   const [enrollSelections, setEnrollSelections] = useState({});
+  const [selectedBatchForStudents, setSelectedBatchForStudents] = useState(null);
 
   const { data = {}, isLoading } = useQuery({
     queryKey: ["teacherBatchesData"],
@@ -125,6 +130,63 @@ function TeacherBatches() {
     enrollStudentMutation.mutate({ batchId, studentId });
   };
 
+  const regenerateJoinCodeMutation = useMutation({
+    mutationFn: async (batchId) => {
+      const res = await api.post(`/batches/${batchId}/regenerate-code`);
+      return res.data;
+    },
+    onSuccess: () => {
+      toast.success("Join code regenerated successfully!");
+      queryClient.invalidateQueries(["teacherBatchesData"]);
+    },
+    onError: (err) => {
+      toast.error(err.response?.data?.message || "Failed to regenerate join code.");
+    }
+  });
+
+  const handleRegenerateCode = (batchId) => {
+    if (confirm("Are you sure you want to regenerate this join code? The old code will become invalid immediately.")) {
+      regenerateJoinCodeMutation.mutate(batchId);
+    }
+  };
+
+  const handleCopyCode = (code) => {
+    if (!code) return;
+    navigator.clipboard.writeText(code);
+    toast.success("Join code copied to clipboard!");
+  };
+
+  // Fetch students in selected batch
+  const { data: batchStudents = [], isLoading: loadingStudents } = useQuery({
+    queryKey: ["batchStudents", selectedBatchForStudents?.id],
+    queryFn: async () => {
+      if (!selectedBatchForStudents?.id) return [];
+      const res = await api.get(`/batches/${selectedBatchForStudents.id}/students`);
+      return res.data.data || [];
+    },
+    enabled: !!selectedBatchForStudents?.id,
+  });
+
+  const unenrollStudentMutation = useMutation({
+    mutationFn: async ({ batchId, studentId }) => {
+      await api.post(`/batches/${batchId}/unenroll`, { studentId });
+    },
+    onSuccess: () => {
+      toast.success("Student unenrolled successfully.");
+      queryClient.invalidateQueries(["batchStudents"]);
+      queryClient.invalidateQueries(["teacherBatchesData"]);
+    },
+    onError: () => {
+      toast.error("Failed to unenroll student.");
+    }
+  });
+
+  const handleUnenrollStudent = (studentId) => {
+    if (confirm("Are you sure you want to remove this student from the batch?")) {
+      unenrollStudentMutation.mutate({ batchId: selectedBatchForStudents.id, studentId });
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
@@ -201,6 +263,37 @@ function TeacherBatches() {
                       <span className="font-semibold text-white">{batch.studentCount} Students Enrolled</span>
                     </div>
                   </div>
+
+                  <div className="flex items-center justify-between border-t border-slate-700/50 pt-3 bg-slate-800/20 px-3 py-2 rounded-lg">
+                    <div className="font-mono text-xs font-bold text-slate-300">
+                      Code: <span className="text-emerald-400 font-semibold tracking-wider text-sm select-all">{batch.joinCode || "N/A"}</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleCopyCode(batch.joinCode)}
+                        disabled={!batch.joinCode}
+                        className="p-1 hover:bg-slate-700/50 rounded text-slate-400 hover:text-emerald-400 transition"
+                        title="Copy Join Code"
+                      >
+                        <Copy className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => handleRegenerateCode(batch.id)}
+                        className="p-1 hover:bg-slate-700/50 rounded text-slate-400 hover:text-emerald-400 transition"
+                        title="Regenerate Join Code"
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <Button
+                    onClick={() => setSelectedBatchForStudents(batch)}
+                    className="w-full bg-slate-850 hover:bg-slate-800 border border-slate-750 text-emerald-400 font-semibold flex items-center justify-center gap-2 py-2 rounded-xl text-sm"
+                  >
+                    <Eye className="h-4 w-4" />
+                    View Enrolled Students
+                  </Button>
                 </CardContent>
               </Card>
             ))}
@@ -314,6 +407,73 @@ function TeacherBatches() {
               className="bg-emerald-500 text-black hover:bg-emerald-400"
             >
               {createBatchMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create Batch"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* View Students Modal */}
+      <Modal
+        isOpen={!!selectedBatchForStudents}
+        onClose={() => setSelectedBatchForStudents(null)}
+        title={selectedBatchForStudents ? `Students in ${selectedBatchForStudents.name}` : "Batch Students"}
+        size="lg"
+      >
+        <div className="space-y-4">
+          {loadingStudents ? (
+            <div className="flex h-32 items-center justify-center">
+              <Loader2 className="h-8 w-8 animate-spin text-emerald-400" />
+            </div>
+          ) : batchStudents.length === 0 ? (
+            <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-12 text-center text-slate-400">
+              <Users className="h-12 w-12 mx-auto text-slate-600 mb-2" />
+              <p className="font-semibold text-white">No students joined yet</p>
+              <p className="text-xs">Students can join using the batch code: <span className="font-mono text-emerald-400 font-bold">{selectedBatchForStudents?.joinCode}</span></p>
+            </div>
+          ) : (
+            <div className="border border-slate-700/50 rounded-2xl overflow-hidden bg-[#111827]/30">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-700 bg-slate-800/40 text-slate-400 font-semibold">
+                      <th className="p-4">Username</th>
+                      <th className="p-4">Email</th>
+                      <th className="p-4">Joined At</th>
+                      <th className="p-4 text-center">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800 text-slate-300">
+                    {batchStudents.map((student) => (
+                      <tr key={student.id} className="hover:bg-slate-800/30 transition">
+                        <td className="p-4 font-semibold text-white">{student.username}</td>
+                        <td className="p-4">{student.email}</td>
+                        <td className="p-4 text-xs text-slate-400">
+                          {student.createdAt ? new Date(student.createdAt).toLocaleDateString() : "Recently"}
+                        </td>
+                        <td className="p-4 text-center">
+                          <Button
+                            onClick={() => handleUnenrollStudent(student.id)}
+                            disabled={unenrollStudentMutation.isPending}
+                            className="bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 text-xs font-semibold py-1.5 px-3 rounded-lg flex items-center gap-1.5 mx-auto"
+                          >
+                            <UserMinus className="h-3.5 w-3.5" />
+                            Remove
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+          <div className="flex justify-end pt-4 border-t border-slate-700/50">
+            <Button
+              onClick={() => setSelectedBatchForStudents(null)}
+              variant="outline"
+              className="border-slate-600 bg-slate-800/50 text-white hover:bg-slate-800"
+            >
+              Close
             </Button>
           </div>
         </div>

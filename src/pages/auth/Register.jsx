@@ -1,16 +1,19 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
-import { registerUser } from "@/services/auth.service";
+import { registerUser, googleLogin } from "@/services/auth.service";
+import { useAuth } from "@/context/useAuth";
 
 function Register() {
   const navigate = useNavigate();
+  const { login } = useAuth();
 
   const [formData, setFormData] = useState({
     username: "",
     email: "",
     password: "",
     role: "student",
+    joinCode: "",
   });
 
   const [loading, setLoading] = useState(false);
@@ -24,6 +27,45 @@ function Register() {
     }));
   };
 
+  const handleGoogleCredentialResponse = async (response) => {
+    setLoading(true);
+    setError("");
+    try {
+      const res = await googleLogin(response.credential);
+      login(res.data.user, res.data.token);
+      toast.success("Google Login successful!");
+      
+      const role = res.data.user.role;
+      if (role === "student") navigate("/student/dashboard");
+      else if (role === "teacher") navigate("/teacher/dashboard");
+      else if (role === "admin") navigate("/admin/dashboard");
+      else navigate("/login");
+    } catch (err) {
+      console.error(err);
+      const message = err.response?.data?.message || "Google Sign-In failed.";
+      setError(message);
+      toast.error(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (window.google) {
+      const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
+      if (googleClientId) {
+        window.google.accounts.id.initialize({
+          client_id: googleClientId,
+          callback: handleGoogleCredentialResponse,
+        });
+        window.google.accounts.id.renderButton(
+          document.getElementById("google-signin-btn"),
+          { theme: "outline", size: "large", width: "100%", text: "continue_with" }
+        );
+      }
+    }
+  }, []);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -34,23 +76,26 @@ function Register() {
     try {
       const response = await registerUser(formData);
 
-      setSuccess(response.message);
+      setSuccess(response.message || "Registration Successful!");
 
-toast.success("Registration Successful!");
+      toast.success("Registration Successful!");
 
-setTimeout(() => {
-    navigate("/login");
-},1000);
+      setTimeout(() => {
+        navigate("/verify-otp", { state: { email: formData.email } });
+      }, 1000);
     } catch (err) {
       console.error(err);
 
-      const message =
-err.response?.data?.message ||
-"Registration Failed.";
+      let message = "Registration Failed.";
+      if (err.response?.data?.error && typeof err.response.data.error === "object") {
+        const errorDetails = Object.values(err.response.data.error).join(", ");
+        message = `${err.response.data.message || "Validation Error"}: ${errorDetails}`;
+      } else if (err.response?.data?.message) {
+        message = err.response.data.message;
+      }
 
-setError(message);
-
-toast.error(message);
+      setError(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -125,6 +170,9 @@ toast.error(message);
               onChange={handleChange}
               className="w-full rounded-xl border border-slate-700 bg-[#0F172A] px-4 py-3 text-white outline-none focus:border-emerald-400"
             />
+            <p className="mt-1.5 text-xs text-slate-500">
+              Must be at least 8 characters, with an uppercase letter, lowercase letter, number, and special character.
+            </p>
           </div>
 
           <div>
@@ -175,6 +223,23 @@ toast.error(message);
             </p>
           </div>
 
+          {formData.role === "student" && (
+            <div>
+              <label className="mb-2 block text-sm text-slate-300">
+                Batch Join Code <span className="text-slate-500 text-xs">(Optional)</span>
+              </label>
+
+              <input
+                type="text"
+                name="joinCode"
+                value={formData.joinCode}
+                onChange={(e) => setFormData((prev) => ({ ...prev, joinCode: e.target.value.toUpperCase() }))}
+                placeholder="e.g. DEV123AB"
+                className="w-full rounded-xl border border-slate-700 bg-[#0F172A] px-4 py-3 text-white outline-none focus:border-emerald-400 font-mono uppercase tracking-widest placeholder:tracking-normal placeholder:font-sans placeholder:text-sm"
+              />
+            </div>
+          )}
+
           <button
             type="submit"
             disabled={loading}
@@ -184,6 +249,15 @@ toast.error(message);
           </button>
 
         </form>
+
+        <div className="relative my-6 flex items-center justify-center">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-slate-700"></div>
+          </div>
+          <span className="relative bg-[#111827] px-4 text-sm text-slate-400">or</span>
+        </div>
+
+        <div id="google-signin-btn" className="w-full min-h-[44px]"></div>
 
         <div className="mt-6 text-center text-sm text-slate-300">
 

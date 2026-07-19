@@ -6,6 +6,8 @@ import { Select, SelectItem } from "@/components/ui/Select";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/services/api";
 import { toast } from "react-hot-toast";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/context/useAuth";
 import {
   User,
   Bell,
@@ -14,9 +16,11 @@ import {
   Save,
   ToggleRight,
   ToggleLeft,
-  Loader2
+  Loader2,
+  RefreshCw,
 } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
+import { Modal } from "@/components/ui/Modal";
 
 function Settings() {
   const { data: userResponse, isLoading } = useQuery({
@@ -40,6 +44,8 @@ function Settings() {
 
 function SettingsContent({ userData }) {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const { login } = useAuth();
   const [activeTab, setActiveTab] = useState("profile");
 
   const [profileForm, setProfileForm] = useState({
@@ -102,12 +108,37 @@ function SettingsContent({ userData }) {
     updateSettingsMutation.mutate(appearance);
   };
 
+  const [isSwitchModalOpen, setIsSwitchModalOpen] = useState(false);
+
+  const switchRoleMutation = useMutation({
+    mutationFn: async () => {
+      const res = await api.post("/auth/switch-role");
+      return res.data;
+    },
+    onSuccess: (res) => {
+      toast.success(`Switched role successfully to ${res.data.user.role}!`);
+      setIsSwitchModalOpen(false);
+      login(res.data.user, res.data.token);
+      
+      const nextPath = res.data.user.role === "student" ? "/student/dashboard" : res.data.user.role === "teacher" ? "/teacher/dashboard" : "/admin/dashboard";
+      navigate(nextPath, { replace: true });
+    },
+    onError: (err) => {
+      toast.error(err.response?.data?.message || "Failed to switch role.");
+    }
+  });
+
+  const handleSwitchRole = () => {
+    switchRoleMutation.mutate();
+  };
+
 
   const tabs = [
     { id: "profile", label: "Profile", icon: User },
     { id: "notifications", label: "Notifications", icon: Bell },
     { id: "security", label: "Security", icon: Shield },
     { id: "appearance", label: "Appearance", icon: Palette },
+    { id: "role", label: "Switch Role", icon: RefreshCw },
   ];
 
   return (
@@ -402,8 +433,72 @@ function SettingsContent({ userData }) {
               </CardContent>
             </Card>
           )}
+
+          {activeTab === "role" && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Shield className="h-5 w-5 text-emerald-400" />
+                  Role Settings
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="rounded-xl border border-slate-700/50 bg-slate-800/30 p-5 space-y-4">
+                  <div>
+                    <p className="text-xs text-slate-400 font-medium uppercase tracking-wider font-semibold">Current Account Role</p>
+                    <p className="text-xl font-bold text-white mt-1 capitalize">{userData.role}</p>
+                  </div>
+                  <p className="text-sm text-slate-300 leading-relaxed">
+                    You can switch your role between **Student** and **Teacher**. 
+                    This will immediately update your dashboard permissions and change your interface.
+                  </p>
+                </div>
+
+                <Button 
+                  onClick={() => setIsSwitchModalOpen(true)}
+                  className="bg-emerald-500 text-black hover:bg-emerald-400 font-semibold"
+                >
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Switch to {userData.role === "student" ? "Teacher" : "Student"}
+                </Button>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
+
+      <Modal
+        isOpen={isSwitchModalOpen}
+        onClose={() => setIsSwitchModalOpen(false)}
+        title="Confirm Role Switch"
+        size="md"
+      >
+        <div className="space-y-4">
+          <p className="text-slate-300 leading-relaxed text-sm">
+            Are you sure you want to switch your account role from <span className="text-emerald-400 font-semibold capitalize">{userData.role}</span> to <span className="text-emerald-400 font-semibold capitalize">{userData.role === "student" ? "teacher" : "student"}</span>?
+          </p>
+          <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-4 text-xs text-yellow-400 space-y-1">
+            <p className="font-bold">⚠️ Warning:</p>
+            <p>Your navigation and sidebar options will change. You will be redirected to the new dashboard instantly.</p>
+          </div>
+          <div className="flex justify-end gap-3 pt-4 border-t border-slate-700/50">
+            <Button
+              onClick={() => setIsSwitchModalOpen(false)}
+              variant="outline"
+              className="border-slate-600 bg-slate-800/50 text-white hover:bg-slate-800"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSwitchRole}
+              disabled={switchRoleMutation.isPending}
+              className="bg-emerald-500 text-black hover:bg-emerald-400 font-semibold"
+            >
+              {switchRoleMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirm Switch"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

@@ -11,6 +11,7 @@ import PublicRoute from "./PublicRoute";
 import Home from "@/pages/home/Home";
 import Login from "@/pages/auth/Login";
 import Register from "@/pages/auth/Register";
+import VerifyOtp from "@/pages/auth/VerifyOtp";
 import ForgotPassword from "@/pages/auth/ForgotPassword";
 import About from "@/pages/home/About";
 import Contact from "@/pages/home/Contact";
@@ -27,6 +28,7 @@ import Workspace from "@/pages/student/Workspace";
 import AIChat from "@/pages/student/AIChat";
 import Certificates from "@/pages/student/Certificates";
 import Notifications from "@/pages/student/Notifications";
+import JoinBatch from "@/pages/student/JoinBatch";
 
 // Teacher Pages
 import TeacherDashboard from "@/pages/teacher/TeacherDashboard";
@@ -118,6 +120,15 @@ function AppRouter() {
         />
 
         <Route
+          path="/verify-otp"
+          element={
+            <PublicRoute>
+              <VerifyOtp />
+            </PublicRoute>
+          }
+        />
+
+        <Route
           path="/forgot-password"
           element={
             <PublicRoute>
@@ -150,6 +161,7 @@ function AppRouter() {
         <Route path="settings" element={<Settings />} />
         <Route path="certificates" element={<Certificates />} />
         <Route path="notifications" element={<Notifications />} />
+        <Route path="join-batch" element={<JoinBatch />} />
       </Route>
 
       {/* ================= TEACHER ROUTES ================= */}

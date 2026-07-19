@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
-import { loginUser } from "@/services/auth.service";
+import { loginUser, googleLogin } from "@/services/auth.service";
 import { useAuth } from "@/context/useAuth";
 import toast from "react-hot-toast";
 
@@ -24,6 +24,45 @@ function Login() {
     }));
   };
 
+  const handleGoogleCredentialResponse = async (response) => {
+    setLoading(true);
+    setError("");
+    try {
+      const res = await googleLogin(response.credential);
+      login(res.data.user, res.data.token);
+      toast.success("Google Login successful!");
+      
+      const role = res.data.user.role;
+      if (role === "student") navigate("/student/dashboard");
+      else if (role === "teacher") navigate("/teacher/dashboard");
+      else if (role === "admin") navigate("/admin/dashboard");
+      else navigate("/login");
+    } catch (err) {
+      console.error(err);
+      const message = err.response?.data?.message || "Google Sign-In failed.";
+      setError(message);
+      toast.error(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (window.google) {
+      const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
+      if (googleClientId) {
+        window.google.accounts.id.initialize({
+          client_id: googleClientId,
+          callback: handleGoogleCredentialResponse,
+        });
+        window.google.accounts.id.renderButton(
+          document.getElementById("google-signin-btn"),
+          { theme: "outline", size: "large", width: "100%", text: "continue_with" }
+        );
+      }
+    }
+  }, []);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -35,18 +74,24 @@ function Login() {
 
       login(response.data.user, response.data.token);
 
-toast.success("Login Successful!");
+      toast.success("Login Successful!");
 
-navigate(getDashboardPath());
+      navigate(getDashboardPath());
     } catch (err) {
       console.error(err);
 
-        const message =
+      const message =
         err.response?.data?.message ||
         "Invalid email or password.";
 
       setError(message);
       toast.error(message);
+
+      if (err.response?.status === 403 || message.toLowerCase().includes("verify") || message.toLowerCase().includes("verified")) {
+        setTimeout(() => {
+          navigate("/verify-otp", { state: { email: formData.email } });
+        }, 1200);
+      }
     } finally {
       setLoading(false);
     }
@@ -110,6 +155,15 @@ navigate(getDashboardPath());
           </button>
 
         </form>
+
+        <div className="relative my-6 flex items-center justify-center">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-slate-700"></div>
+          </div>
+          <span className="relative bg-[#111827] px-4 text-sm text-slate-400">or</span>
+        </div>
+
+        <div id="google-signin-btn" className="w-full min-h-[44px]"></div>
 
         <div className="mt-6 flex items-center justify-between text-sm">
 

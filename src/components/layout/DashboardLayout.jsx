@@ -32,6 +32,7 @@ function DashboardLayout() {
     { icon: LayoutDashboard, label: "Dashboard", path: "/student/dashboard" },
     { icon: BookOpen, label: "Question Bank", path: "/student/question-bank" },
     { icon: FileText, label: "Homework", path: "/student/homework" },
+    { icon: Users, label: "Join Batch", path: "/student/join-batch" },
     { icon: Trophy, label: "Contests", path: "/student/contests" },
     { icon: Trophy, label: "Leaderboard", path: "/student/leaderboard" },
     { icon: Award, label: "Certificates", path: "/student/certificates" },
