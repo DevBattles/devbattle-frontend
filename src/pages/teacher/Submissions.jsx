@@ -1,28 +1,22 @@
-import React, { useEffect, useState } from "react";
+import { useState } from "react";
 import api from "@/services/api";
-import { Eye, FileCode, CheckCircle, XCircle, AlertCircle, Loader2 } from "lucide-react";
-import toast from "react-hot-toast";
+import { useQuery } from "@tanstack/react-query";
+import { Eye, FileCode, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
 
 function Submissions() {
-  const [submissions, setSubmissions] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState("homework");
   const [selectedSub, setSelectedSub] = useState(null);
 
-  useEffect(() => {
-    const fetchSubmissions = async () => {
-      try {
-        const res = await api.get("/homework/submissions");
-        if (res.data && res.data.success) {
-          setSubmissions(res.data.data);
-        }
-      } catch (err) {
-        toast.error("Failed to load submissions list.");
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchSubmissions();
-  }, []);
+  const { data: submissionsResponse, isLoading: loading } = useQuery({
+    queryKey: ["submissions", "teacher", activeTab],
+    queryFn: async () => {
+      const endpoint = activeTab === "homework" ? "/homework/submissions" : "/contests/submissions";
+      const res = await api.get(endpoint);
+      return res.data;
+    },
+  });
+
+  const submissions = submissionsResponse?.data || [];
 
   if (loading) {
     return (
@@ -39,11 +33,35 @@ function Submissions() {
         <p className="text-sm text-slate-400">Monitor academic submissions, check grade results, and inspect source files.</p>
       </div>
 
+      {/* Tabs */}
+      <div className="flex gap-4 border-b border-slate-700 pb-px">
+        <button
+          onClick={() => setActiveTab("homework")}
+          className={`pb-3 text-sm font-semibold transition border-b-2 ${
+            activeTab === "homework"
+              ? "border-emerald-500 text-emerald-400"
+              : "border-transparent text-slate-400 hover:text-white"
+          }`}
+        >
+          Homework Submissions
+        </button>
+        <button
+          onClick={() => setActiveTab("contest")}
+          className={`pb-3 text-sm font-semibold transition border-b-2 ${
+            activeTab === "contest"
+              ? "border-emerald-500 text-emerald-400"
+              : "border-transparent text-slate-400 hover:text-white"
+          }`}
+        >
+          Contest Submissions
+        </button>
+      </div>
+
       {submissions.length === 0 ? (
         <div className="rounded-2xl border border-slate-700 bg-[#111827]/50 p-12 text-center space-y-4">
           <FileCode className="h-16 w-16 text-slate-600 mx-auto" />
           <h3 className="text-lg font-bold text-white">No Submissions Found</h3>
-          <p className="text-sm text-slate-400">Once students submit homework code modules, they will show up here.</p>
+          <p className="text-sm text-slate-400">Once students submit code modules, they will show up here.</p>
         </div>
       ) : (
         <div className="bg-[#111827]/50 border border-slate-700/50 rounded-2xl overflow-hidden">
@@ -52,7 +70,7 @@ function Submissions() {
               <thead>
                 <tr className="border-b border-slate-700 bg-slate-800/40 text-slate-400 font-semibold">
                   <th className="p-4">Student</th>
-                  <th className="p-4">Homework Title</th>
+                  <th className="p-4">{activeTab === "homework" ? "Homework Title" : "Contest Title"}</th>
                   <th className="p-4 text-center">Score</th>
                   <th className="p-4 text-center">Grade</th>
                   <th className="p-4">Date</th>
@@ -63,7 +81,7 @@ function Submissions() {
                 {submissions.map((sub) => (
                   <tr key={sub.id} className="hover:bg-slate-800/30 transition">
                     <td className="p-4 font-semibold text-white">{sub.student?.username || "Student"}</td>
-                    <td className="p-4">{sub.homework?.title || "Challenge"}</td>
+                    <td className="p-4">{activeTab === "homework" ? (sub.homework?.title || "Challenge") : (sub.contest?.title || "Contest Challenge")}</td>
                     <td className="p-4 text-center font-bold text-emerald-400">{sub.score}%</td>
                     <td className="p-4 text-center">
                       <span className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-3 py-1 rounded-full text-xs font-semibold">
@@ -98,7 +116,7 @@ function Submissions() {
               <div>
                 <h3 className="text-xl font-bold text-white">Review Submission</h3>
                 <p className="text-xs text-slate-400 mt-1">
-                  Submitted by {selectedSub.student?.username} for {selectedSub.homework?.title}
+                  Submitted by {selectedSub.student?.username} for {selectedSub.homework?.title || selectedSub.contest?.title || "Challenge"}
                 </p>
               </div>
               <button

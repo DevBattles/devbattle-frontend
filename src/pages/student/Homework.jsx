@@ -1,10 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
+import { Card, CardContent } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Input } from "@/components/ui/Input";
 import { Select, SelectItem } from "@/components/ui/Select";
-import toast from "react-hot-toast";
+import { useQuery } from "@tanstack/react-query";
 import api from "@/services/api";
 import {
   Search,
@@ -14,30 +14,22 @@ import {
   Clock,
   Award,
   Play,
+  Loader2,
 } from "lucide-react";
 
 function StudentHomework() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("all");
-  const [homeworkList, setHomeworkList] = useState([]);
-  const [loading, setLoading] = useState(true);
 
-  const fetchAssignedHomework = async () => {
-    try {
-      setLoading(true);
+  const { data: homeworkResponse, isLoading: loading } = useQuery({
+    queryKey: ["homework", "assigned"],
+    queryFn: async () => {
       const res = await api.get("/homework/assigned");
-      setHomeworkList(res.data.data?.data || res.data.data || []);
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to load assigned homeworks.");
-    } finally {
-      setLoading(false);
-    }
-  };
+      return res.data;
+    },
+  });
 
-  useEffect(() => {
-    fetchAssignedHomework();
-  }, []);
+  const homeworkList = homeworkResponse?.data?.data || homeworkResponse?.data || [];
 
   const getDaysRemaining = (dueDateString) => {
     const dueDate = new Date(dueDateString);
@@ -173,7 +165,9 @@ function StudentHomework() {
       {/* Homework List */}
       <div className="space-y-4">
         {loading ? (
-          <p className="text-slate-400">Loading homeworks...</p>
+          <div className="flex h-32 items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
+          </div>
         ) : filteredHomework.length === 0 ? (
           <p className="text-slate-500">No homework assignments found.</p>
         ) : (

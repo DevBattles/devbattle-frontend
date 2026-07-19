@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import api from "@/services/api";
 import { FileCode, Calendar, Loader2 } from "lucide-react";
 import toast from "react-hot-toast";
@@ -12,11 +12,14 @@ function ManageHomework() {
       try {
         const res = await api.get("/homework");
         if (res.data && res.data.success) {
-          setHomeworks(res.data.data);
+          const list = res.data.data?.data || res.data.data || [];
+          setHomeworks(list);
         }
       } catch (err) {
+      console.error(err);
+
         toast.error("Failed to load homework database records.");
-      } finally {
+    } finally {
         setLoading(false);
       }
     };

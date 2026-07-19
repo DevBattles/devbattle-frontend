@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import api from "@/services/api";
 import { Trophy, Users, Calendar, Loader2 } from "lucide-react";
 import toast from "react-hot-toast";
@@ -12,11 +12,14 @@ function ManageContests() {
       try {
         const res = await api.get("/contests");
         if (res.data && res.data.success) {
-          setContests(res.data.data);
+          const list = res.data.data?.data || res.data.data || [];
+          setContests(list);
         }
       } catch (err) {
+      console.error(err);
+
         toast.error("Failed to load contests database records.");
-      } finally {
+    } finally {
         setLoading(false);
       }
     };

@@ -1,66 +1,83 @@
-import React, { useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/services/api";
-import { Building2, Plus, ArrowRight, Loader2 } from "lucide-react";
+import { Building2, Plus, Loader2 } from "lucide-react";
 import toast from "react-hot-toast";
 
 function Departments() {
-  const [data, setData] = useState([]);
-  const [loading, setLoading] = useState(true);
-  
+  const queryClient = useQueryClient();
   const [collegeName, setCollegeName] = useState("");
   const [deptName, setDeptName] = useState("");
   const [selectedCollegeId, setSelectedCollegeId] = useState("");
 
-  const fetchData = async () => {
-    try {
+  const { data: collegesData, isLoading } = useQuery({
+    queryKey: ["adminCollegesDepartments"],
+    queryFn: async () => {
       const res = await api.get("/admin/colleges-departments");
       if (res.data && res.data.success) {
-        setData(res.data.data);
+        return res.data.data;
       }
-    } catch (err) {
-      toast.error("Failed to load college list.");
-    } finally {
-      setLoading(false);
+      return { colleges: [], departments: [] };
     }
-  };
+  });
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const handleAddCollege = async (e) => {
-    e.preventDefault();
-    if (!collegeName.trim()) return;
-    try {
-      await api.post("/admin/colleges", { name: collegeName });
+  const addCollegeMutation = useMutation({
+    mutationFn: async (name) => {
+      await api.post("/admin/colleges", { name });
+    },
+    onSuccess: () => {
       toast.success("College onboarded successfully!");
       setCollegeName("");
-      fetchData();
-    } catch (err) {
+      queryClient.invalidateQueries(["adminCollegesDepartments"]);
+    },
+    onError: (error) => {
+      console.error(error);
       toast.error("Failed to onboard college.");
     }
-  };
+  });
 
-  const handleAddDept = async (e) => {
-    e.preventDefault();
-    if (!deptName.trim() || !selectedCollegeId) return;
-    try {
-      await api.post("/admin/departments", { name: deptName, collegeId: selectedCollegeId });
+  const addDeptMutation = useMutation({
+    mutationFn: async (data) => {
+      await api.post("/admin/departments", data);
+    },
+    onSuccess: () => {
       toast.success("Department onboarded successfully!");
       setDeptName("");
-      fetchData();
-    } catch (err) {
+      queryClient.invalidateQueries(["adminCollegesDepartments"]);
+    },
+    onError: (error) => {
+      console.error(error);
       toast.error("Failed to onboard department.");
     }
+  });
+
+  const handleAddCollege = (e) => {
+    e.preventDefault();
+    if (!collegeName.trim()) return;
+    addCollegeMutation.mutate(collegeName);
   };
 
-  if (loading) {
+  const handleAddDept = (e) => {
+    e.preventDefault();
+    if (!deptName.trim() || !selectedCollegeId) return;
+    addDeptMutation.mutate({ name: deptName, collegeId: selectedCollegeId });
+  };
+
+  if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-emerald-400" />
       </div>
     );
   }
+
+  const colleges = collegesData?.colleges || [];
+  const departments = collegesData?.departments || [];
+
+  const collegesWithDepts = colleges.map((college) => ({
+    ...college,
+    departments: departments.filter((dept) => dept.collegeId === college.id)
+  }));
 
   return (
     <div className="space-y-6">
@@ -89,7 +106,8 @@ function Departments() {
               />
               <button
                 type="submit"
-                className="bg-emerald-500 hover:bg-emerald-400 text-black font-bold px-4 py-2.5 rounded-xl transition text-sm flex items-center gap-1 shrink-0"
+                disabled={addCollegeMutation.isPending}
+                className="bg-emerald-500 hover:bg-emerald-400 text-black font-bold px-4 py-2.5 rounded-xl transition text-sm flex items-center gap-1 shrink-0 disabled:opacity-50"
               >
                 <Plus className="h-4 w-4" /> Add
               </button>
@@ -112,7 +130,7 @@ function Departments() {
                   className="w-full bg-[#0F172A] border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-emerald-400 transition"
                 >
                   <option value="">-- Choose College --</option>
-                  {data.map((c) => (
+                  {colleges.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name}
                     </option>
@@ -130,7 +148,8 @@ function Departments() {
                 />
                 <button
                   type="submit"
-                  className="bg-blue-500 hover:bg-blue-400 text-white font-bold px-4 py-2.5 rounded-xl transition text-sm flex items-center gap-1 shrink-0"
+                  disabled={addDeptMutation.isPending}
+                  className="bg-blue-500 hover:bg-blue-400 text-white font-bold px-4 py-2.5 rounded-xl transition text-sm flex items-center gap-1 shrink-0 disabled:opacity-50"
                 >
                   <Plus className="h-4 w-4" /> Add
                 </button>
@@ -142,11 +161,11 @@ function Departments() {
         {/* Existing List */}
         <div className="bg-[#111827]/50 border border-slate-700/50 rounded-2xl p-6 space-y-4 overflow-y-auto max-h-[60vh]">
           <h3 className="text-lg font-bold text-white">Configured Colleges & Depts</h3>
-          {data.length === 0 ? (
+          {collegesWithDepts.length === 0 ? (
             <p className="text-sm text-slate-400">No records configured yet.</p>
           ) : (
             <div className="space-y-4">
-              {data.map((college) => (
+              {collegesWithDepts.map((college) => (
                 <div key={college.id} className="border border-slate-800 rounded-xl p-4 bg-slate-900/30">
                   <h4 className="font-bold text-white text-sm">{college.name}</h4>
                   <ul className="mt-2 pl-4 list-disc space-y-1 text-slate-400 text-xs">

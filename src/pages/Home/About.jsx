@@ -1,5 +1,4 @@
-import React from "react";
-import { Users, Award, Code, GraduationCap } from "lucide-react";
+import { Users, Award, Code } from "lucide-react";
 
 function About() {
   return (

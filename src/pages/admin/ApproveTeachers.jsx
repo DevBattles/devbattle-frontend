@@ -1,48 +1,45 @@
-import React, { useEffect, useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/services/api";
 import { ShieldCheck, CheckSquare, Loader2 } from "lucide-react";
 import toast from "react-hot-toast";
 
 function ApproveTeachers() {
-  const [pending, setPending] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
 
-  const fetchPendingTeachers = async () => {
-    try {
+  const { data: pendingTeachers = [], isLoading } = useQuery({
+    queryKey: ["adminTeachers"],
+    queryFn: async () => {
       const res = await api.get("/admin/teachers");
       if (res.data && res.data.success) {
-        // Filter only those teachers who are not approved yet
-        const pendingList = res.data.data.filter((t) => !t.isApproved);
-        setPending(pendingList);
+        return res.data.data.filter((t) => !t.isApproved);
       }
-    } catch (err) {
-      toast.error("Failed to load pending teachers list.");
-    } finally {
-      setLoading(false);
+      return [];
     }
-  };
+  });
 
-  useEffect(() => {
-    fetchPendingTeachers();
-  }, []);
-
-  const handleApprove = async (id) => {
-    try {
+  const approveMutation = useMutation({
+    mutationFn: async (id) => {
       await api.put(`/admin/teachers/${id}/approve`, { isApproved: true });
+    },
+    onSuccess: () => {
       toast.success("Teacher account approved successfully!");
-      fetchPendingTeachers();
-    } catch (err) {
+      queryClient.invalidateQueries(["adminTeachers"]);
+    },
+    onError: (error) => {
+      console.error(error);
       toast.error("Failed to approve teacher account.");
     }
-  };
+  });
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-emerald-400" />
       </div>
     );
   }
+
+  const pending = pendingTeachers;
 
   return (
     <div className="space-y-6">
@@ -73,8 +70,9 @@ function ApproveTeachers() {
               </div>
               
               <button
-                onClick={() => handleApprove(t.id)}
-                className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-black font-bold py-2.5 rounded-xl transition text-sm"
+                onClick={() => approveMutation.mutate(t.id)}
+                disabled={approveMutation.isPending}
+                className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-black font-bold py-2.5 rounded-xl transition text-sm disabled:opacity-50"
               >
                 <CheckSquare className="h-4 w-4" />
                 Approve & Activate Account

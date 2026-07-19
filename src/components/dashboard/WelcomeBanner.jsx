@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { Trophy, ArrowRight } from "lucide-react";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth } from "@/context/useAuth";
 
 function WelcomeBanner() {
   const navigate = useNavigate();

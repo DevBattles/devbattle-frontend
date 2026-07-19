@@ -1,52 +1,54 @@
-import React, { useEffect, useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/services/api";
 import { Bell, Check, CheckSquare, Loader2 } from "lucide-react";
 import toast from "react-hot-toast";
 
 function Notifications() {
-  const [notifications, setNotifications] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
 
-  const fetchNotifications = async () => {
-    try {
+  const { data: notifications = [], isLoading } = useQuery({
+    queryKey: ["notifications"],
+    queryFn: async () => {
       const res = await api.get("/notifications");
       if (res.data && res.data.success) {
-        setNotifications(res.data.data);
+        return res.data.data;
       }
-    } catch (err) {
-      toast.error("Failed to load notifications.");
-    } finally {
-      setLoading(false);
+      return [];
     }
-  };
+  });
 
-  useEffect(() => {
-    fetchNotifications();
-  }, []);
-
-  const markAsRead = async (id) => {
-    try {
+  const markAsReadMutation = useMutation({
+    mutationFn: async (id) => {
       await api.put(`/notifications/${id}/read`);
-      setNotifications((prev) =>
-        prev.map((n) => (n.id === id ? { ...n, isRead: true } : n))
-      );
+    },
+    onSuccess: () => {
       toast.success("Notification marked as read");
-    } catch (err) {
+      queryClient.invalidateQueries(["notifications"]);
+    },
+    onError: (error) => {
+      console.error(error);
       toast.error("Failed to update notification.");
     }
-  };
+  });
 
-  const markAllAsRead = async () => {
-    try {
+  const markAllAsReadMutation = useMutation({
+    mutationFn: async () => {
       await api.put("/notifications/read-all");
-      setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+    },
+    onSuccess: () => {
       toast.success("All notifications marked as read");
-    } catch (err) {
+      queryClient.invalidateQueries(["notifications"]);
+    },
+    onError: (error) => {
+      console.error(error);
       toast.error("Failed to update notifications.");
     }
-  };
+  });
 
-  if (loading) {
+  const markAsRead = (id) => markAsReadMutation.mutate(id);
+  const markAllAsRead = () => markAllAsReadMutation.mutate();
+
+  if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-emerald-400" />

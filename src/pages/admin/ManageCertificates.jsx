@@ -1,6 +1,6 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import api from "@/services/api";
-import { Award, Plus, Send, Loader2 } from "lucide-react";
+import { Send } from "lucide-react";
 import toast from "react-hot-toast";
 
 function ManageCertificates() {
@@ -29,6 +29,8 @@ function ManageCertificates() {
         setFormData({ studentId: "", questionId: "", title: "", description: "" });
       }
     } catch (err) {
+      console.error(err);
+
       toast.error(err.response?.data?.message || "Failed to generate certificate.");
     } finally {
       setLoading(false);

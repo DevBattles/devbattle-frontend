@@ -1,42 +1,35 @@
-import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
+import { useState } from "react";
+import { Card, CardContent } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/Input";
 import { Select, SelectItem } from "@/components/ui/Select";
 import { Modal } from "@/components/ui/Modal";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import api from "@/services/api";
 import {
   Plus,
   Search,
   Trophy,
-  Users,
   Clock,
-  Play,
-  Edit,
   Trash2,
   Calendar,
-  Filter,
+  Loader2,
 } from "lucide-react";
 
 function TeacherContests() {
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedStatus, setSelectedStatus] = useState("all");
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
 
-  // Loaded database lists
-  const [contestsList, setContestsList] = useState([]);
-  const [questionsList, setQuestionsList] = useState([]);
-  const [isSaving, setIsSaving] = useState(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
   // Contest Form fields
   const [contestName, setContestName] = useState("");
   const [contestDescription, setContestDescription] = useState("");
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
+  const [contestBatch, setContestBatch] = useState("");
   const [publishImmediately, setPublishImmediately] = useState(true);
 
   // Selected questions mapping: { [questionId]: { points: 100, order: 1 } }
@@ -48,31 +41,39 @@ function TeacherContests() {
   const [questionDescription, setQuestionDescription] = useState("");
   const [questionDifficulty, setQuestionDifficulty] = useState("easy");
   const [questionTech, setQuestionTech] = useState("HTML");
-  const [questionTags, setQuestionTags] = useState("");
-  const [questionRequirements, setQuestionRequirements] = useState("");
+
   const [questionStarterCode, setQuestionStarterCode] = useState("<!-- Starter HTML Code -->");
   const [questionExpectedOutput, setQuestionExpectedOutput] = useState("");
 
-  const fetchContestsAndQuestions = async () => {
-    try {
-      setLoading(true);
-      const [contestsRes, qRes] = await Promise.all([
-        api.get("/contests"),
-        api.get("/questions")
-      ]);
-      setContestsList(contestsRes.data.data?.data || contestsRes.data.data || []);
-      setQuestionsList(qRes.data.data?.data || []);
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to load contests or question bank.");
-    } finally {
-      setLoading(false);
+  // Fetch data
+  const { data: contestsData, isLoading: cLoading } = useQuery({
+    queryKey: ["contests"],
+    queryFn: async () => {
+      const res = await api.get("/contests");
+      return res.data.data?.data || res.data.data || [];
     }
-  };
+  });
 
-  useEffect(() => {
-    fetchContestsAndQuestions();
-  }, []);
+  const { data: questionsData, isLoading: qLoading } = useQuery({
+    queryKey: ["questions"],
+    queryFn: async () => {
+      const res = await api.get("/questions");
+      return res.data.data?.data || [];
+    }
+  });
+
+  const { data: batchesData, isLoading: bLoading } = useQuery({
+    queryKey: ["batches"],
+    queryFn: async () => {
+      const res = await api.get("/batches");
+      return res.data.data || [];
+    }
+  });
+
+  const contestsList = contestsData || [];
+  const questionsList = questionsData || [];
+  const batchesList = batchesData || [];
+  const loading = cLoading || qLoading || bLoading;
 
   const handleToggleQuestionSelection = (questionId) => {
     setSelectedQuestions((prev) => {
@@ -97,36 +98,17 @@ function TeacherContests() {
     }));
   };
 
-  const handleAddCustomQuestionInline = async () => {
-    if (!questionTitle.trim() || !questionDescription.trim()) {
-      toast.error("Please fill in the custom question details.");
-      return;
-    }
-
-    try {
-      setIsSaving(true);
-      const questionPayload = {
-        title: questionTitle,
-        description: questionDescription,
-        difficulty: questionDifficulty,
-        estimatedTime: "30 mins",
-        techStack: [questionTech],
-        tags: questionTags.split(",").map(t => t.trim()).filter(Boolean),
-        requirements: questionRequirements.split("\n").map(r => r.trim()).filter(Boolean),
-        starterFiles: { "index.html": { content: questionStarterCode } },
-        expectedOutput: questionExpectedOutput,
-        published: true
-      };
-
-      const qRes = await api.post("/questions", questionPayload);
+  const createQuestionMutation = useMutation({
+    mutationFn: async (payload) => {
+      const qRes = await api.post("/questions", payload);
       const newQuestion = qRes.data.data;
-      
-      // Auto-publish it
       await api.post(`/questions/${newQuestion.id}/publish`);
-
+      return newQuestion;
+    },
+    onSuccess: (newQuestion) => {
+      queryClient.invalidateQueries(["questions"]);
       toast.success("Question created and published to bank!");
       
-      // Select it immediately
       setSelectedQuestions((prev) => {
         const order = Object.keys(prev).length + 1;
         return {
@@ -135,25 +117,58 @@ function TeacherContests() {
         };
       });
 
-      // Clear question form
       setQuestionTitle("");
       setQuestionDescription("");
       setQuestionStarterCode("<!-- Starter HTML Code -->");
       setQuestionExpectedOutput("");
       setIsCreatingCustomQuestion(false);
-
-      // Refetch questions list
-      const qListRes = await api.get("/questions");
-      setQuestionsList(qListRes.data.data?.data || []);
-    } catch (err) {
-      console.error(err);
+    },
+    onError: () => {
       toast.error("Failed to create inline question.");
-    } finally {
-      setIsSaving(false);
     }
+  });
+
+  const handleAddCustomQuestionInline = () => {
+    if (!questionTitle.trim() || !questionDescription.trim()) {
+      toast.error("Please fill in the custom question details.");
+      return;
+    }
+
+    createQuestionMutation.mutate({
+      title: questionTitle,
+      description: questionDescription,
+      difficulty: questionDifficulty,
+      estimatedTime: "30 mins",
+      techStack: [questionTech],
+      tags: [],
+      requirements: [],
+      starterFiles: { "index.html": { content: questionStarterCode } },
+      expectedOutput: questionExpectedOutput,
+      published: true
+    });
   };
 
-  const handleCreateContest = async () => {
+  const createContestMutation = useMutation({
+    mutationFn: async (payload) => {
+      await api.post("/contests", payload);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(["contests"]);
+      toast.success("Contest created successfully!");
+      setIsCreateModalOpen(false);
+      setContestName("");
+      setContestDescription("");
+      setStartTime("");
+      setEndTime("");
+      setContestBatch("");
+      setSelectedQuestions({});
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.message || "Failed to create contest.");
+    }
+  });
+
+  const handleCreateContest = () => {
     if (!contestName.trim() || !startTime || !endTime) {
       toast.error("Please fill in the contest name, start time, and end time.");
       return;
@@ -165,52 +180,39 @@ function TeacherContests() {
       return;
     }
 
-    setIsSaving(true);
-    try {
-      const questionsPayload = questionIds.map((qId) => ({
-        questionId: qId,
-        order: selectedQuestions[qId].order,
-        points: selectedQuestions[qId].points
-      }));
+    const questionsPayload = questionIds.map((qId) => ({
+      questionId: qId,
+      order: selectedQuestions[qId].order,
+      points: selectedQuestions[qId].points
+    }));
 
-      const contestPayload = {
-        title: contestName,
-        description: contestDescription,
-        startTime: new Date(startTime).toISOString(),
-        endTime: new Date(endTime).toISOString(),
-        published: publishImmediately,
-        questions: questionsPayload
-      };
-
-      await api.post("/contests", contestPayload);
-      toast.success("Contest created successfully!");
-      setIsCreateModalOpen(false);
-
-      // Reset fields
-      setContestName("");
-      setContestDescription("");
-      setStartTime("");
-      setEndTime("");
-      setSelectedQuestions({});
-
-      fetchContestsAndQuestions();
-    } catch (err) {
-      console.error(err);
-      toast.error(err.response?.data?.message || "Failed to create contest.");
-    } finally {
-      setIsSaving(false);
-    }
+    createContestMutation.mutate({
+      title: contestName,
+      description: contestDescription,
+      startTime: new Date(startTime).toISOString(),
+      endTime: new Date(endTime).toISOString(),
+      published: publishImmediately,
+      questions: questionsPayload,
+      batch: contestBatch || null
+    });
   };
 
-  const handleDeleteContest = async (id) => {
-    if (!confirm("Are you sure you want to delete this contest?")) return;
-    try {
+  const deleteContestMutation = useMutation({
+    mutationFn: async (id) => {
       await api.delete(`/contests/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(["contests"]);
       toast.success("Contest deleted successfully.");
-      fetchContestsAndQuestions();
-    } catch (err) {
-      console.error(err);
+    },
+    onError: () => {
       toast.error("Failed to delete contest.");
+    }
+  });
+
+  const handleDeleteContest = (id) => {
+    if (confirm("Are you sure you want to delete this contest?")) {
+      deleteContestMutation.mutate(id);
     }
   };
 
@@ -297,7 +299,9 @@ function TeacherContests() {
       {/* Contests List */}
       <div className="space-y-4">
         {loading ? (
-          <p className="text-slate-400">Loading contests...</p>
+          <div className="flex h-32 items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
+          </div>
         ) : filteredContests.length === 0 ? (
           <p className="text-slate-500">No contests found.</p>
         ) : (
@@ -390,6 +394,21 @@ function TeacherContests() {
             </div>
           </div>
 
+          <div>
+            <label className="mb-2 block text-sm text-slate-300">Assign to Batch (Optional)</label>
+            <Select
+              value={contestBatch}
+              onChange={(e) => setContestBatch(e.target.value)}
+            >
+              <SelectItem value="">All Batches (Public)</SelectItem>
+              {batchesList.map((batch) => (
+                <SelectItem key={batch.id} value={batch.name}>
+                  {batch.name}
+                </SelectItem>
+              ))}
+            </Select>
+          </div>
+
           <hr className="border-slate-700" />
 
           {/* Question Selector List */}
@@ -466,10 +485,11 @@ function TeacherContests() {
 
                 <Button
                   onClick={handleAddCustomQuestionInline}
-                  disabled={isSaving}
+                  disabled={createQuestionMutation.isPending}
                   className="bg-blue-500 text-black hover:bg-blue-400 text-xs px-4 py-2"
                 >
-                  Save Question & Add to Selection
+                  {createQuestionMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                  {createQuestionMutation.isPending ? "Saving..." : "Save Question & Add to Selection"}
                 </Button>
               </div>
             ) : null}
@@ -546,10 +566,11 @@ function TeacherContests() {
             </Button>
             <Button
               onClick={handleCreateContest}
-              disabled={isSaving}
+              disabled={createContestMutation.isPending}
               className="bg-emerald-500 text-black hover:bg-emerald-400"
             >
-              {isSaving ? "Saving..." : "Create Contest"}
+              {createContestMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+              {createContestMutation.isPending ? "Saving..." : "Create Contest"}
             </Button>
           </div>
         </div>

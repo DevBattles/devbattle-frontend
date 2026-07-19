@@ -1,46 +1,59 @@
-import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/Input";
 import { Select, SelectItem } from "@/components/ui/Select";
 import { Modal } from "@/components/ui/Modal";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import api from "@/services/api";
+import { getDefaultStarterFiles } from "@/utils/boilerplate";
 import {
   Search,
   Plus,
+  Clock,
+
+  Tag,
+  Loader2,
   Edit,
   Trash2,
-  Clock,
-  BookOpen,
-  Filter,
-  Tag,
 } from "lucide-react";
 
 function TeacherQuestionBank() {
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [selectedDifficulty, setSelectedDifficulty] = useState("all");
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [questionsList, setQuestionsList] = useState([]);
-  const [isSaving, setIsSaving] = useState(false);
 
   // Form Fields
   const [currentQuestionId, setCurrentQuestionId] = useState(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [category, setCategory] = useState("html");
+  const [category, setCategory] = useState("algorithms");
   const [difficulty, setDifficulty] = useState("easy");
   const [techStack, setTechStack] = useState("");
   const [estimatedTime, setEstimatedTime] = useState("30 mins");
   const [tags, setTags] = useState("");
-  const [starterCode, setStarterCode] = useState("<!-- starter code -->");
+  const [programmingLanguage, setProgrammingLanguage] = useState("javascript");
+  const [workspaceType, setWorkspaceType] = useState("javascript");
+  const [starterFiles, setStarterFiles] = useState({});
   const [expectedOutput, setExpectedOutput] = useState("");
   const [publishImmediately, setPublishImmediately] = useState(true);
+  
+  // Metadata fields
+  const [timeLimit, setTimeLimit] = useState("");
+  const [memoryLimit, setMemoryLimit] = useState("");
+  const [hints, setHints] = useState("");
+  const [companies, setCompanies] = useState("");
+
+  const handleProgrammingLanguageChange = (lang) => {
+    setProgrammingLanguage(lang);
+    setWorkspaceType(lang);
+    setStarterFiles(getDefaultStarterFiles(lang));
+  };
 
   const categories = [
     "html",
@@ -65,34 +78,31 @@ function TeacherQuestionBank() {
     "figma_to_react"
   ];
 
-  const fetchQuestions = async () => {
-    try {
-      setLoading(true);
+  const { data: questionsData, isLoading: loading } = useQuery({
+    queryKey: ["questions", "teacher"],
+    queryFn: async () => {
       const res = await api.get("/questions");
-      setQuestionsList(res.data.data?.data || []);
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to load question bank.");
-    } finally {
-      setLoading(false);
+      return res.data.data?.data || [];
     }
-  };
+  });
 
-  useEffect(() => {
-    fetchQuestions();
-  }, []);
+  const questionsList = questionsData || [];
 
   const handleOpenCreate = () => {
     setCurrentQuestionId(null);
     setTitle("");
     setDescription("");
-    setCategory("react");
+    setCategory("algorithms");
     setDifficulty("easy");
-    setTechStack("React, HTML, CSS");
+    setTechStack("JavaScript, Algorithms");
     setEstimatedTime("30 mins");
-    setTags("React, State, Hook");
-    setStarterCode("<!-- starter code -->");
+    setTags("Arrays, Loops");
+    handleProgrammingLanguageChange("javascript");
     setExpectedOutput("");
+    setTimeLimit("2000");
+    setMemoryLimit("256");
+    setHints("");
+    setCompanies("");
     setPublishImmediately(true);
     setIsCreateModalOpen(true);
   };
@@ -101,87 +111,124 @@ function TeacherQuestionBank() {
     setCurrentQuestionId(q.id);
     setTitle(q.title);
     setDescription(q.description);
-    setCategory(q.category || "react");
+    setCategory(q.category || "algorithms");
     setDifficulty(q.difficulty);
     setTechStack(Array.isArray(q.techStack) ? q.techStack.join(", ") : "");
     setEstimatedTime(q.estimatedTime || "30 mins");
     setTags(Array.isArray(q.tags) ? q.tags.join(", ") : "");
-    setStarterCode(q.starterFiles?.["index.html"]?.content || "");
+    
+    const meta = q.metadata || {};
+    setProgrammingLanguage(meta.programmingLanguage || q.workspaceType || "javascript");
+    setWorkspaceType(q.workspaceType || "javascript");
+    setStarterFiles(q.starterFiles || {});
+    
+    setTimeLimit(meta.timeLimit || "");
+    setMemoryLimit(meta.memoryLimit || "");
+    setHints(Array.isArray(meta.hints) ? meta.hints.join(", ") : meta.hints || "");
+    setCompanies(Array.isArray(meta.companies) ? meta.companies.join(", ") : meta.companies || "");
+    
     setExpectedOutput(q.expectedOutput || "");
     setPublishImmediately(q.published);
     setIsEditModalOpen(true);
   };
 
-  const handleSaveQuestion = async (isEdit = false) => {
-    if (!title.trim() || !description.trim()) {
-      toast.error("Please fill in the title and description.");
-      return;
-    }
-
-    setIsSaving(true);
-    try {
-      const payload = {
-        title,
-        description,
-        difficulty,
-        estimatedTime,
-        techStack: techStack.split(",").map(t => t.trim()).filter(Boolean),
-        tags: tags.split(",").map(t => t.trim()).filter(Boolean),
-        requirements: ["Must pass basic tests"],
-        starterFiles: { "index.html": { content: starterCode } },
-        expectedOutput,
-        published: publishImmediately
-      };
-
+  const saveQuestionMutation = useMutation({
+    mutationFn: async ({ isEdit, payload }) => {
       if (isEdit) {
         await api.put(`/questions/${currentQuestionId}`, payload);
-        toast.success("Question updated successfully!");
-        setIsEditModalOpen(false);
       } else {
         const createRes = await api.post("/questions", payload);
         const newId = createRes.data.data.id;
         if (publishImmediately) {
           await api.post(`/questions/${newId}/publish`);
         }
-        toast.success("Question created successfully!");
+      }
+    },
+    onSuccess: (_, { isEdit }) => {
+      queryClient.invalidateQueries(["questions", "teacher"]);
+      toast.success(isEdit ? "Question updated successfully!" : "Question created successfully!");
+      if (isEdit) {
+        setIsEditModalOpen(false);
+      } else {
         setIsCreateModalOpen(false);
       }
-
-      fetchQuestions();
-    } catch (err) {
-      console.error(err);
+    },
+    onError: () => {
       toast.error("Failed to save question.");
-    } finally {
-      setIsSaving(false);
     }
+  });
+
+  const handleSaveQuestion = (isEdit = false) => {
+    if (!title.trim() || !description.trim()) {
+      toast.error("Please fill in the title and description.");
+      return;
+    }
+
+    const payload = {
+      title,
+      description,
+      category,
+      workspaceType,
+      difficulty,
+      estimatedTime,
+      techStack: techStack.split(",").map(t => t.trim()).filter(Boolean),
+      tags: tags.split(",").map(t => t.trim()).filter(Boolean),
+      requirements: ["Must pass basic tests"],
+      starterFiles,
+      expectedOutput,
+      published: publishImmediately,
+      metadata: {
+        programmingLanguage,
+        timeLimit,
+        memoryLimit,
+        hints: hints.split(",").map(h => h.trim()).filter(Boolean),
+        companies: companies.split(",").map(c => c.trim()).filter(Boolean)
+      }
+    };
+
+    saveQuestionMutation.mutate({ isEdit, payload });
   };
 
-  const handleDeleteQuestion = async (id) => {
-    if (!confirm("Are you sure you want to delete this question from bank?")) return;
-    try {
+  const deleteQuestionMutation = useMutation({
+    mutationFn: async (id) => {
       await api.delete(`/questions/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(["questions", "teacher"]);
       toast.success("Question deleted successfully.");
-      fetchQuestions();
-    } catch (err) {
-      console.error(err);
+    },
+    onError: () => {
       toast.error("Failed to delete question.");
     }
+  });
+
+  const handleDeleteQuestion = (id) => {
+    if (confirm("Are you sure you want to delete this question from bank?")) {
+      deleteQuestionMutation.mutate(id);
+    }
   };
 
-  const handleTogglePublish = async (q) => {
-    try {
+  const togglePublishMutation = useMutation({
+    mutationFn: async (q) => {
       if (q.published) {
         await api.post(`/questions/${q.id}/unpublish`);
-        toast.success("Question unpublished.");
+        return false;
       } else {
         await api.post(`/questions/${q.id}/publish`);
-        toast.success("Question published to bank.");
+        return true;
       }
-      fetchQuestions();
-    } catch (err) {
-      console.error(err);
+    },
+    onSuccess: (isPublished) => {
+      queryClient.invalidateQueries(["questions", "teacher"]);
+      toast.success(isPublished ? "Question published to bank." : "Question unpublished.");
+    },
+    onError: () => {
       toast.error("Failed to change visibility status.");
     }
+  });
+
+  const handleTogglePublish = (q) => {
+    togglePublishMutation.mutate(q);
   };
 
   const filteredQuestions = questionsList.filter((question) => {
@@ -261,7 +308,9 @@ function TeacherQuestionBank() {
       {/* Questions Grid */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {loading ? (
-          <p className="text-slate-400">Loading questions...</p>
+          <div className="col-span-full flex h-32 items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
+          </div>
         ) : filteredQuestions.length === 0 ? (
           <p className="text-slate-500 col-span-full">No questions found.</p>
         ) : (
@@ -336,12 +385,14 @@ function TeacherQuestionBank() {
                 <div className="mt-4 flex items-center justify-between">
                   <button
                     onClick={() => handleTogglePublish(question)}
+                    disabled={togglePublishMutation.isPending && togglePublishMutation.variables?.id === question.id}
                     className={`text-xs px-2.5 py-1 rounded font-semibold cursor-pointer ${
                       question.published
                         ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
                         : "bg-slate-700/50 text-slate-300 border border-slate-600/30"
                     }`}
                   >
+                    {togglePublishMutation.isPending && togglePublishMutation.variables?.id === question.id ? <Loader2 className="h-3 w-3 inline animate-spin mr-1" /> : null}
                     {question.published ? "Published" : "Draft"}
                   </button>
                 </div>
@@ -453,12 +504,79 @@ function TeacherQuestionBank() {
         </div>
 
         <div>
-          <label className="mb-2 block text-sm text-slate-300">Starter Code (index.html)</label>
+          <label className="mb-2 block text-sm text-slate-300">Programming Language (Workspace Type)</label>
+          <Select
+            value={programmingLanguage}
+            onChange={(e) => handleProgrammingLanguageChange(e.target.value)}
+          >
+            <SelectItem value="javascript">JavaScript</SelectItem>
+            <SelectItem value="python">Python</SelectItem>
+            <SelectItem value="java">Java</SelectItem>
+            <SelectItem value="cpp">C++</SelectItem>
+            <SelectItem value="sql">SQL</SelectItem>
+            <SelectItem value="html_css">HTML/CSS</SelectItem>
+            <SelectItem value="react">React</SelectItem>
+            <SelectItem value="mcq">Multiple Choice</SelectItem>
+            <SelectItem value="theory">Theory</SelectItem>
+          </Select>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label className="mb-2 block text-sm text-slate-300">Time Limit (ms)</label>
+            <Input
+              value={timeLimit}
+              onChange={(e) => setTimeLimit(e.target.value)}
+              placeholder="e.g., 2000"
+            />
+          </div>
+          <div>
+            <label className="mb-2 block text-sm text-slate-300">Memory Limit (MB)</label>
+            <Input
+              value={memoryLimit}
+              onChange={(e) => setMemoryLimit(e.target.value)}
+              placeholder="e.g., 256"
+            />
+          </div>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label className="mb-2 block text-sm text-slate-300">Hints (comma separated)</label>
+            <Input
+              value={hints}
+              onChange={(e) => setHints(e.target.value)}
+              placeholder="e.g., Use a Hash Map"
+            />
+          </div>
+          <div>
+            <label className="mb-2 block text-sm text-slate-300">Companies (comma separated)</label>
+            <Input
+              value={companies}
+              onChange={(e) => setCompanies(e.target.value)}
+              placeholder="e.g., Google, Meta"
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className="mb-2 flex items-center justify-between text-sm text-slate-300">
+            <span>Starter Files JSON</span>
+            <span className="text-xs text-slate-500">(Auto-generated based on language)</span>
+          </label>
           <textarea
-            value={starterCode}
-            onChange={(e) => setStarterCode(e.target.value)}
-            placeholder="Enter starter code..."
-            className="w-full font-mono rounded-xl border border-slate-700 bg-[#0F172A] px-4 py-3 text-white outline-none focus:border-emerald-400 min-h-[100px] text-sm"
+            value={JSON.stringify(starterFiles, null, 2)}
+            onChange={(e) => {
+              try {
+                setStarterFiles(JSON.parse(e.target.value));
+              } catch (err) {
+      console.error(err);
+
+                // Ignore parse errors while typing
+    }
+            }}
+            placeholder="{}"
+            className="w-full font-mono rounded-xl border border-slate-700 bg-[#0F172A] px-4 py-3 text-white outline-none focus:border-emerald-400 min-h-[150px] text-xs"
           />
         </div>
 
@@ -494,10 +612,11 @@ function TeacherQuestionBank() {
           </Button>
           <Button
             onClick={() => handleSaveQuestion(isEdit)}
-            disabled={isSaving}
+            disabled={saveQuestionMutation.isPending}
             className="bg-emerald-500 text-black hover:bg-emerald-400"
           >
-            {isSaving ? "Saving..." : isEdit ? "Save Changes" : "Create Question"}
+            {saveQuestionMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+            {saveQuestionMutation.isPending ? "Saving..." : isEdit ? "Save Changes" : "Create Question"}
           </Button>
         </div>
       </div>
