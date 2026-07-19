@@ -1,27 +1,122 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useSearchParams, useNavigate, Link } from "react-router-dom";
 import Editor from "@monaco-editor/react";
 import {
-  Play,
   RefreshCw,
-  Download,
-  Upload,
-  Maximize2,
-  Minimize2,
-  FileCode,
-  Folder,
-  X,
-  Check,
-  Send,
   Terminal,
+  FileCode,
+  Download,
   Eye,
+  Play,
+  X,
+  Send,
+  Minimize2,
+  Maximize2,
+  Folder,
+  Check,
 } from "lucide-react";
-import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import toast from "react-hot-toast";
 import api from "@/services/api";
+import { getDefaultStarterFiles } from "@/utils/boilerplate";
+
+const normalizeFileContent = (fileValue) =>
+  typeof fileValue === "string" ? fileValue : fileValue?.content || "";
+
+const getFileLanguage = (fileName) => {
+  if (fileName.endsWith(".html") || fileName.endsWith(".htm")) return "html";
+  if (fileName.endsWith(".css")) return "css";
+  if (fileName.endsWith(".jsx") || fileName.endsWith(".js") || fileName.endsWith(".mjs") || fileName.endsWith(".cjs")) return "javascript";
+  if (fileName.endsWith(".tsx") || fileName.endsWith(".ts")) return "typescript";
+  if (fileName.endsWith(".json")) return "json";
+  if (fileName.endsWith(".py")) return "python";
+  if (fileName.endsWith(".java")) return "java";
+  if (fileName.endsWith(".cpp") || fileName.endsWith(".cc") || fileName.endsWith(".cxx")) return "cpp";
+  if (fileName.endsWith(".sql")) return "sql";
+  return "plaintext";
+};
+
+const normalizeStarterFiles = (starterFiles = {}) =>
+  Object.entries(starterFiles || {}).reduce((accumulator, [filename, fileValue]) => {
+    accumulator[filename] = {
+      content: normalizeFileContent(fileValue),
+    };
+    return accumulator;
+  }, {});
+
+const getWorkspaceKind = (question) => {
+  const rawKind = (question?.workspaceType || question?.metadata?.programmingLanguage || question?.category || "").toLowerCase();
+
+  if (!rawKind) return "javascript";
+
+  if (["html", "html_css", "css", "frontend", "responsive_design", "portfolio", "landing_page", "dashboard", "netflix_clone", "todo_app", "figma_to_react"].includes(rawKind)) {
+    return "frontend";
+  }
+
+  if (["react", "nextjs", "tailwind"].includes(rawKind)) {
+    return "react";
+  }
+
+  if (["node", "express", "backend", "rest_api", "authentication", "mongodb"].includes(rawKind)) {
+    return "backend";
+  }
+
+  if (["javascript", "javascript_logic", "bug_fixing", "code_review"].includes(rawKind)) {
+    return "javascript";
+  }
+
+  if (["python", "cpp", "java", "sql", "mcq", "theory"].includes(rawKind)) {
+    return rawKind;
+  }
+
+  return rawKind;
+};
+
+const buildStarterFilesForQuestion = (question) => {
+  const providedStarterFiles = normalizeStarterFiles(question?.starterFiles);
+
+  if (Object.keys(providedStarterFiles).length > 0) {
+    return providedStarterFiles;
+  }
+
+  const workspaceKind = getWorkspaceKind(question);
+
+  if (workspaceKind === "mcq" || workspaceKind === "theory") {
+    return {};
+  }
+
+  if (workspaceKind === "frontend") {
+    return getDefaultStarterFiles("html_css");
+  }
+
+  if (workspaceKind === "react") {
+    return getDefaultStarterFiles("react");
+  }
+
+  if (workspaceKind === "backend") {
+    return getDefaultStarterFiles("node");
+  }
+
+  if (["javascript", "python", "cpp", "java", "sql"].includes(workspaceKind)) {
+    return getDefaultStarterFiles(workspaceKind);
+  }
+
+  return getDefaultStarterFiles(question?.metadata?.programmingLanguage || workspaceKind || "javascript");
+};
+
+const getPrimaryFileName = (starterFiles) => {
+  const preferredOrder = ["index.html", "App.jsx", "main.jsx", "server.js", "app.js", "main.js", "main.py", "main.cpp", "query.sql"];
+
+  for (const fileName of preferredOrder) {
+    if (starterFiles[fileName]) {
+      return fileName;
+    }
+  }
+
+  return Object.keys(starterFiles)[0] || "index.html";
+};
 
 function Workspace() {
   const { id, contestId: contestIdUrl } = useParams();
@@ -50,6 +145,7 @@ function Workspace() {
   const [project, setProject] = useState(null);
   const [question, setQuestion] = useState(null);
   const [metaInfo, setMetaInfo] = useState({ title: "Workspace", type: "Practice", subtitle: "" });
+  const workspaceKind = getWorkspaceKind(question);
 
   // Resizer state
   const [editorWidth, setEditorWidth] = useState(50); // percentage (e.g. 50%)
@@ -114,7 +210,7 @@ function Workspace() {
                 subtitle: `Due: ${hwRes.data.data.dueDate ? new Date(hwRes.data.data.dueDate).toLocaleDateString() : ""}`
               });
             }
-          } catch (e) {
+          } catch {
             // It's not a homework, must be a question!
             try {
               const qRes = await api.get(`/questions/${id}`);
@@ -144,8 +240,10 @@ function Workspace() {
                 subtitle: `Due: ${hwRes.data.data.dueDate ? new Date(hwRes.data.data.dueDate).toLocaleDateString() : ""}`
               });
             } catch (err) {
+      console.error(err);
+
               console.error(err);
-            }
+    }
           } else if (cId) {
             try {
               const contestRes = await api.get(`/contests/${cId}`);
@@ -157,8 +255,10 @@ function Workspace() {
                 subtitle: "Live Contest"
               });
             } catch (err) {
+      console.error(err);
+
               console.error(err);
-            }
+    }
           }
         }
 
@@ -188,33 +288,28 @@ function Workspace() {
         const filesRes = await api.get(`/workspace/projects/${activeProject.id}/files`);
         const existingFiles = filesRes.data.data || [];
 
-        if (existingFiles.length === 0 && loadedQuestion?.starterFiles) {
-          // Initialize project files with starterFiles
-          const initialized = {};
-          for (const [filename, fileObj] of Object.entries(loadedQuestion.starterFiles)) {
-            let lang = "html";
-            if (filename.endsWith(".css")) lang = "css";
-            else if (filename.endsWith(".js") || filename.endsWith(".jsx")) lang = "javascript";
-            else if (filename.endsWith(".json")) lang = "json";
+        const desiredStarterFiles = buildStarterFilesForQuestion(loadedQuestion);
 
-            const fileContent = typeof fileObj === "string" ? fileObj : fileObj.content || "";
+        if (existingFiles.length === 0 && Object.keys(desiredStarterFiles).length > 0) {
+          const initialized = {};
+          for (const [filename, fileObj] of Object.entries(desiredStarterFiles)) {
+            const fileContent = normalizeFileContent(fileObj);
 
             const newFileRes = await api.post("/workspace/files", {
               projectId: activeProject.id,
               fileName: filename,
-              language: lang,
+              language: getFileLanguage(filename),
               content: fileContent
             });
             initialized[filename] = {
               id: newFileRes.data.data.id,
               name: filename,
-              language: lang,
+              language: getFileLanguage(filename),
               code: fileContent
             };
           }
           setFiles(initialized);
-          const firstFile = Object.keys(initialized)[0] || "index.html";
-          setActiveFile(firstFile);
+          setActiveFile(getPrimaryFileName(initialized));
         } else {
           const filesMap = {};
           existingFiles.forEach(f => {
@@ -225,27 +320,51 @@ function Workspace() {
               code: f.content
             };
           });
-          setFiles(filesMap);
-          const firstFile = Object.keys(filesMap)[0] || "index.html";
-          setActiveFile(firstFile);
+
+          const starterKeys = Object.keys(desiredStarterFiles);
+          const existingKeys = Object.keys(filesMap);
+          const needsSync = starterKeys.some(k => !filesMap[k]) || existingKeys.some(k => !desiredStarterFiles[k]);
+
+          if (needsSync && Object.keys(desiredStarterFiles).length > 0) {
+            const initialized = {};
+            for (const file of existingFiles) {
+              await api.delete(`/workspace/files/${file.id}`);
+            }
+            for (const [filename, fileObj] of Object.entries(desiredStarterFiles)) {
+              const fileContent = normalizeFileContent(fileObj);
+
+              const newFileRes = await api.post("/workspace/files", {
+                projectId: activeProject.id,
+                fileName: filename,
+                language: getFileLanguage(filename),
+                content: fileContent
+              });
+              initialized[filename] = {
+                id: newFileRes.data.data.id,
+                name: filename,
+                language: getFileLanguage(filename),
+                code: fileContent
+              };
+            }
+            setFiles(initialized);
+            setActiveFile(getPrimaryFileName(initialized));
+          } else {
+            setFiles(filesMap);
+            setActiveFile(getPrimaryFileName(filesMap));
+          }
         }
       } catch (err) {
+      console.error(err);
+
         console.error("Error initializing workspace", err);
         toast.error("Failed to load workspace files.");
-      } finally {
+    } finally {
         setLoading(false);
       }
     };
 
     initializeWorkspace();
-  }, [id, contestIdUrl]);
-
-  // Update preview when files change (if autoRefresh is true)
-  useEffect(() => {
-    if (autoRefresh && Object.keys(files).length > 0) {
-      updatePreview();
-    }
-  }, [files, autoRefresh]);
+  }, [id, contestIdUrl, contestIdParam, homeworkIdParam]);
 
   useEffect(() => {
     const handleIframeMessage = (event) => {
@@ -266,7 +385,9 @@ function Workspace() {
     };
   }, []);
 
-  const updatePreview = () => {
+  const shouldUseLivePreview = workspaceKind === "frontend" || workspaceKind === "react";
+
+  const updatePreview = useCallback(() => {
     const html = files["index.html"]?.code || "";
     const css = files["style.css"]?.code || "";
     const js = files["script.js"]?.code || "";
@@ -313,7 +434,14 @@ function Workspace() {
     }
 
     setPreviewHtml(fullHtml);
-  };
+  }, [files]);
+
+  // Update preview when files change (if autoRefresh is true)
+  useEffect(() => {
+    if (autoRefresh && shouldUseLivePreview && Object.keys(files).length > 0) {
+      updatePreview();
+    }
+  }, [files, autoRefresh, updatePreview, shouldUseLivePreview]);
 
   const handleFileChange = (fileName, newCode) => {
     setFiles((prev) => ({
@@ -345,13 +473,13 @@ function Workspace() {
 
   useEffect(() => {
     if (question) {
-      if (question.previewRequired === false) {
+      if (question.previewRequired === false || ["javascript", "python", "cpp", "java", "sql", "backend", "mcq", "theory"].includes(workspaceKind)) {
         setEditorWidth(100);
       } else {
         setEditorWidth(50);
       }
     }
-  }, [question]);
+  }, [question, workspaceKind]);
 
   const handleRun = async () => {
     setConsoleOutput((prev) => [
@@ -372,10 +500,10 @@ function Workspace() {
         { type: "success", message: "Code saved successfully.", timestamp: new Date().toLocaleTimeString() }
       ]);
 
-      const workspaceType = question?.workspaceType;
+      const workspaceType = workspaceKind;
 
-      if (workspaceType === "javascript_logic") {
-        const jsCode = files["main.js"]?.code || "";
+      if (workspaceType === "javascript") {
+        const jsCode = files["main.js"]?.code || files["script.js"]?.code || "";
         try {
           let logs = [];
           const originalLog = console.log;
@@ -394,11 +522,20 @@ function Workspace() {
             { type: "success", message: `Execution output: ${result !== undefined ? JSON.stringify(result) : 'undefined'}`, timestamp: new Date().toLocaleTimeString() }
           ]);
         } catch (err) {
+      console.error(err);
+
           setConsoleOutput(prev => [
             ...prev,
             { type: "error", message: `Runtime Error: ${err.message}`, timestamp: new Date().toLocaleTimeString() }
           ]);
-        }
+    }
+      } else if (workspaceType === "backend") {
+        const entryPoint = files["server.js"] ? "server.js" : files["app.js"] ? "app.js" : files["index.js"] ? "index.js" : "server.js";
+        setConsoleOutput(prev => [
+          ...prev,
+          { type: "info", message: `node ${entryPoint}`, timestamp: new Date().toLocaleTimeString() },
+          { type: "success", message: "Execution output: Backend server startup simulated successfully.", timestamp: new Date().toLocaleTimeString() }
+        ]);
       } else if (workspaceType === "python") {
         setConsoleOutput(prev => [
           ...prev,
@@ -417,8 +554,13 @@ function Workspace() {
           { type: "info", message: "Executing query against SQLite SQL memory database...", timestamp: new Date().toLocaleTimeString() },
           { type: "success", message: "Execution output: SQL query run successfully. Results match schemas.", timestamp: new Date().toLocaleTimeString() }
         ]);
-      } else {
+      } else if (shouldUseLivePreview) {
         updatePreview();
+      } else {
+        setConsoleOutput(prev => [
+          ...prev,
+          { type: "info", message: "Code saved successfully.", timestamp: new Date().toLocaleTimeString() }
+        ]);
       }
     } catch (e) {
       console.error(e);
@@ -429,23 +571,60 @@ function Workspace() {
     }
   };
 
-  const handleReset = () => {
-    if (!question?.starterFiles) return;
-    const resetFiles = {};
-    Object.entries(question.starterFiles).forEach(([filename, fileObj]) => {
-      let lang = "html";
-      if (filename.endsWith(".css")) lang = "css";
-      else if (filename.endsWith(".js") || filename.endsWith(".jsx")) lang = "javascript";
-      else if (filename.endsWith(".json")) lang = "json";
+  const handleReset = async () => {
+    const starterFiles = buildStarterFilesForQuestion(question);
+    if (Object.keys(starterFiles).length === 0) return;
+    
+    setConsoleOutput((prev) => [
+      ...prev,
+      { type: "info", message: "Resetting files to starter template...", timestamp: new Date().toLocaleTimeString() }
+    ]);
 
-      const fileContent = typeof fileObj === "string" ? fileObj : fileObj.content || "";
-      resetFiles[filename] = {
-        ...files[filename],
-        code: fileContent
-      };
-    });
-    setFiles(resetFiles);
-    toast.success("Workspace reset to starter files!");
+    try {
+      const resetFiles = {};
+      for (const [filename, fileObj] of Object.entries(starterFiles)) {
+        const fileContent = normalizeFileContent(fileObj);
+        const existingFile = files[filename];
+        
+        if (existingFile && existingFile.id) {
+          await api.put(`/workspace/files/${existingFile.id}`, {
+            content: fileContent
+          });
+          resetFiles[filename] = {
+            ...existingFile,
+            code: fileContent
+          };
+        } else {
+          const newFileRes = await api.post("/workspace/files", {
+            projectId: project.id,
+            fileName: filename,
+            language: getFileLanguage(filename),
+            content: fileContent
+          });
+          resetFiles[filename] = {
+            id: newFileRes.data.data.id,
+            name: filename,
+            language: getFileLanguage(filename),
+            code: fileContent
+          };
+        }
+      }
+      
+      for (const filename of Object.keys(files)) {
+        if (!starterFiles[filename]) {
+          const fileToDelete = files[filename];
+          if (fileToDelete && fileToDelete.id) {
+            await api.delete(`/workspace/files/${fileToDelete.id}`);
+          }
+        }
+      }
+
+      setFiles(resetFiles);
+      toast.success("Workspace reset to starter files successfully!");
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to reset workspace files.");
+    }
   };
 
   const handleDownload = () => {
@@ -513,6 +692,8 @@ function Workspace() {
       setIsSubmitModalOpen(false);
     } catch (err) {
       console.error(err);
+
+      console.error(err);
       toast.error(err.response?.data?.message || "Failed to submit assignment.");
       setConsoleOutput((prev) => [
         ...prev,
@@ -544,7 +725,13 @@ function Workspace() {
           </button>
           <div>
             <h1 className="font-semibold text-white">{question?.title || metaInfo.title}</h1>
-            <p className="text-xs text-slate-400">{metaInfo.type} • {metaInfo.subtitle}</p>
+            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+              {metaInfo.type && <span>{metaInfo.type}</span>}
+              {metaInfo.subtitle && <span>{metaInfo.subtitle}</span>}
+              {question?.difficulty && <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">{question.difficulty}</Badge>}
+              {question?.category && <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">{question.category}</Badge>}
+              {question?.estimatedTime && <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">{question.estimatedTime}</Badge>}
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -662,10 +849,23 @@ function Workspace() {
                     })}
                   </div>
                 </div>
+              ) : question?.workspaceType === "theory" ? (
+                <div className="p-6 bg-[#111827] text-white h-full flex flex-col space-y-4">
+                  <div>
+                    <h3 className="text-lg font-bold text-emerald-400">Theory Response</h3>
+                    <p className="text-slate-400 text-sm mt-1">Please write your detailed explanation below.</p>
+                  </div>
+                  <textarea
+                    className="flex-1 w-full rounded-xl border border-slate-700 bg-[#0F172A] p-4 text-white outline-none focus:border-emerald-400 resize-none font-sans text-sm leading-relaxed shadow-inner"
+                    placeholder="Type your explanation here..."
+                    value={files[Object.keys(files)[0]]?.code || ""}
+                    onChange={(e) => handleFileChange(Object.keys(files)[0] || "answer.txt", e.target.value)}
+                  />
+                </div>
               ) : (
                 <Editor
                   height="100%"
-                  language={question?.supportedLanguage || files[activeFile]?.language || "html"}
+                  language={files[activeFile]?.language || question?.metadata?.programmingLanguage || question?.workspaceType || "javascript"}
                   value={files[activeFile]?.code || ""}
                   onChange={(newCode) => handleFileChange(activeFile, newCode || "")}
                   theme="vs-dark"

@@ -1,5 +1,4 @@
-import React from "react";
-import { Check, ShieldAlert } from "lucide-react";
+import { Check } from "lucide-react";
 import { Link } from "react-router-dom";
 
 function Pricing() {

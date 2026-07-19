@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Card, CardContent } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/Input";
@@ -8,27 +8,21 @@ import { Select, SelectItem } from "@/components/ui/Select";
 import { Modal } from "@/components/ui/Modal";
 import toast from "react-hot-toast";
 import api from "@/services/api";
+import { getDefaultStarterFiles } from "@/utils/boilerplate";
 import {
   Plus,
   Search,
   Calendar,
   Users,
   FileText,
-  Edit,
   Trash2,
   Clock,
-  Filter,
 } from "lucide-react";
 
 function TeacherHomework() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("all");
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
-
-  // Lists fetched from backend
-  const [homeworkList, setHomeworkList] = useState([]);
-  const [questionsList, setQuestionsList] = useState([]);
   const [isSaving, setIsSaving] = useState(false);
 
   // Homework creation fields
@@ -44,69 +38,99 @@ function TeacherHomework() {
   const [selectedQuestionId, setSelectedQuestionId] = useState("");
 
   // Custom question fields
-  const [questionTitle, setQuestionTitle] = useState("");
-  const [questionDescription, setQuestionDescription] = useState("");
   const [questionDifficulty, setQuestionDifficulty] = useState("easy");
-  const [questionTech, setQuestionTech] = useState("HTML");
+  const [questionTech, setQuestionTech] = useState("algorithms");
   const [questionTags, setQuestionTags] = useState("");
   const [questionRequirements, setQuestionRequirements] = useState("");
-  const [questionStarterCode, setQuestionStarterCode] = useState("<!-- Starter HTML Code -->");
   const [questionExpectedOutput, setQuestionExpectedOutput] = useState("");
   const [addToQuestionBank, setAddToQuestionBank] = useState(true);
 
-  const [batchesList, setBatchesList] = useState([]);
+  const [programmingLanguage, setProgrammingLanguage] = useState("javascript");
+  const [workspaceType, setWorkspaceType] = useState("javascript");
+  const [starterFiles, setStarterFiles] = useState({});
+  const [timeLimit, setTimeLimit] = useState("2000");
+  const [memoryLimit, setMemoryLimit] = useState("256");
 
-  const fetchHomeworkAndQuestions = async () => {
-    try {
-      setLoading(true);
+  const handleProgrammingLanguageChange = (lang) => {
+    setProgrammingLanguage(lang);
+    setWorkspaceType(lang);
+    setStarterFiles(getDefaultStarterFiles(lang));
+  };
+
+  const queryClient = useQueryClient();
+
+  const { data: homeworkData = {}, isLoading: loading } = useQuery({
+    queryKey: ["teacherHomeworkData"],
+    queryFn: async () => {
       const [hwRes, qRes, batchesRes] = await Promise.all([
         api.get("/homework"),
         api.get("/questions"),
         api.get("/batches")
       ]);
-      setHomeworkList(hwRes.data.data?.data || hwRes.data.data || []);
-      setQuestionsList(qRes.data.data?.data || []);
-      setBatchesList(batchesRes.data.data || []);
-    } catch (err) {
+      return {
+        homeworkList: hwRes.data.data?.data || hwRes.data.data || [],
+        questionsList: qRes.data.data?.data || [],
+        batchesList: batchesRes.data.data || []
+      };
+    },
+    onError: (err) => {
       console.error(err);
       toast.error("Failed to load homework, questions or student batches.");
-    } finally {
-      setLoading(false);
     }
-  };
+  });
 
-  useEffect(() => {
-    fetchHomeworkAndQuestions();
-  }, []);
+  const { homeworkList = [], questionsList = [], batchesList = [] } = homeworkData;
 
   const handleCreateHomework = async () => {
-    if (!homeworkTitle.trim() || !dueDate) {
-      toast.error("Please fill in the homework title and due date.");
+    if (!dueDate) {
+      toast.error("Please fill in the due date.");
       return;
     }
 
     setIsSaving(true);
     try {
       let finalQuestionId = selectedQuestionId;
+      let finalTitle = "";
+      let finalDescription = "";
 
-      if (questionSource === "new") {
-        if (!questionTitle.trim() || !questionDescription.trim()) {
-          toast.error("Please fill in custom question details.");
+      if (questionSource === "existing") {
+        const selectedQ = questionsList.find((q) => q.id === selectedQuestionId);
+        if (!selectedQ) {
+          toast.error("Please select a question.");
           setIsSaving(false);
           return;
         }
-
+        finalQuestionId = selectedQ.id;
+        finalTitle = selectedQ.title;
+        finalDescription = selectedQ.description || "";
+      } else {
+        if (!homeworkTitle.trim()) {
+          toast.error("Please fill in the question title.");
+          setIsSaving(false);
+          return;
+        }
+        finalTitle = homeworkTitle;
+        finalDescription = homeworkDescription;
         const questionPayload = {
-          title: questionTitle,
-          description: questionDescription,
+          title: finalTitle,
+          description: finalDescription,
+          category: questionTech,
+          workspaceType: workspaceType,
           difficulty: questionDifficulty,
           estimatedTime: "30 mins",
           techStack: [questionTech],
           tags: questionTags.split(",").map(t => t.trim()).filter(Boolean),
           requirements: questionRequirements.split("\n").map(r => r.trim()).filter(Boolean),
-          starterFiles: { "index.html": { content: questionStarterCode } },
+          starterFiles: starterFiles,
           expectedOutput: questionExpectedOutput,
-          published: addToQuestionBank
+          published: addToQuestionBank,
+          metadata: {
+            programmingLanguage,
+            timeLimit,
+            memoryLimit,
+            hints: [],
+            companies: []
+          }
         };
 
         const qRes = await api.post("/questions", questionPayload);
@@ -124,8 +148,8 @@ function TeacherHomework() {
       }
 
       const homeworkPayload = {
-        title: homeworkTitle,
-        description: homeworkDescription,
+        title: finalTitle,
+        description: finalDescription,
         dueDate: new Date(dueDate).toISOString(),
         questions: [finalQuestionId]
       };
@@ -146,13 +170,10 @@ function TeacherHomework() {
       setHomeworkTitle("");
       setHomeworkDescription("");
       setDueDate("");
-      setQuestionTitle("");
-      setQuestionDescription("");
-      setQuestionStarterCode("<!-- Starter HTML Code -->");
       setQuestionExpectedOutput("");
       setSelectedQuestionId("");
 
-      fetchHomeworkAndQuestions();
+      queryClient.invalidateQueries(["teacherHomeworkData"]);
     } catch (err) {
       console.error(err);
       toast.error(err.response?.data?.message || "Failed to create homework assignment.");
@@ -161,16 +182,23 @@ function TeacherHomework() {
     }
   };
 
-  const handleDeleteHomework = async (id) => {
-    if (!confirm("Are you sure you want to delete this homework assignment?")) return;
-    try {
+  const deleteHomeworkMutation = useMutation({
+    mutationFn: async (id) => {
       await api.delete(`/homework/${id}`);
+    },
+    onSuccess: () => {
       toast.success("Homework deleted successfully.");
-      fetchHomeworkAndQuestions();
-    } catch (err) {
+      queryClient.invalidateQueries(["teacherHomeworkData"]);
+    },
+    onError: (err) => {
       console.error(err);
       toast.error("Failed to delete homework.");
     }
+  });
+
+  const handleDeleteHomework = (id) => {
+    if (!confirm("Are you sure you want to delete this homework assignment?")) return;
+    deleteHomeworkMutation.mutate(id);
   };
 
   const filteredHomework = homeworkList.filter((hw) => {
@@ -354,24 +382,7 @@ function TeacherHomework() {
         size="lg"
       >
         <div className="space-y-4 max-h-[80vh] overflow-y-auto pr-2">
-          <div>
-            <label className="mb-2 block text-sm text-slate-300">Title</label>
-            <Input
-              value={homeworkTitle}
-              onChange={(e) => setHomeworkTitle(e.target.value)}
-              placeholder="Enter homework title"
-            />
-          </div>
 
-          <div>
-            <label className="mb-2 block text-sm text-slate-300">Description</label>
-            <textarea
-              value={homeworkDescription}
-              onChange={(e) => setHomeworkDescription(e.target.value)}
-              placeholder="Enter homework description"
-              className="w-full rounded-xl border border-slate-700 bg-[#0F172A] px-4 py-3 text-white outline-none focus:border-emerald-400 min-h-[100px]"
-            />
-          </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
@@ -448,17 +459,17 @@ function TeacherHomework() {
               <div>
                 <label className="mb-2 block text-xs text-slate-300">Question Title</label>
                 <Input
-                  value={questionTitle}
-                  onChange={(e) => setQuestionTitle(e.target.value)}
-                  placeholder="e.g. Implement Binary Search"
+                  value={homeworkTitle}
+                  onChange={(e) => setHomeworkTitle(e.target.value)}
+                  placeholder="e.g. Find Max Subarray Sum"
                 />
               </div>
 
               <div>
                 <label className="mb-2 block text-xs text-slate-300">Question Description</label>
                 <textarea
-                  value={questionDescription}
-                  onChange={(e) => setQuestionDescription(e.target.value)}
+                  value={homeworkDescription}
+                  onChange={(e) => setHomeworkDescription(e.target.value)}
                   placeholder="Detail the instructions..."
                   className="w-full rounded-xl border border-slate-700 bg-[#0F172A] px-4 py-3 text-white outline-none focus:border-emerald-400 min-h-[80px] text-sm"
                 />
@@ -478,16 +489,45 @@ function TeacherHomework() {
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-xs text-slate-300">Technology</label>
+                  <label className="mb-2 block text-xs text-slate-300">Category</label>
                   <Select
                     value={questionTech}
                     onChange={(e) => setQuestionTech(e.target.value)}
                   >
-                    <SelectItem value="HTML">HTML</SelectItem>
-                    <SelectItem value="CSS">CSS</SelectItem>
-                    <SelectItem value="JavaScript">JavaScript</SelectItem>
-                    <SelectItem value="React">React</SelectItem>
+                    <SelectItem value="algorithms">Algorithms</SelectItem>
+                    <SelectItem value="react">React</SelectItem>
+                    <SelectItem value="html">HTML/CSS</SelectItem>
+                    <SelectItem value="system_design">System Design</SelectItem>
                   </Select>
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-xs text-slate-300">Programming Language (Workspace Type)</label>
+                <Select
+                  value={programmingLanguage}
+                  onChange={(e) => handleProgrammingLanguageChange(e.target.value)}
+                >
+                  <SelectItem value="javascript">JavaScript</SelectItem>
+                  <SelectItem value="python">Python</SelectItem>
+                  <SelectItem value="java">Java</SelectItem>
+                  <SelectItem value="cpp">C++</SelectItem>
+                  <SelectItem value="sql">SQL</SelectItem>
+                  <SelectItem value="html_css">HTML/CSS</SelectItem>
+                  <SelectItem value="react">React</SelectItem>
+                  <SelectItem value="mcq">Multiple Choice</SelectItem>
+                  <SelectItem value="theory">Theory</SelectItem>
+                </Select>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="mb-2 block text-xs text-slate-300">Time Limit (ms)</label>
+                  <Input value={timeLimit} onChange={(e) => setTimeLimit(e.target.value)} placeholder="2000" />
+                </div>
+                <div>
+                  <label className="mb-2 block text-xs text-slate-300">Memory Limit (MB)</label>
+                  <Input value={memoryLimit} onChange={(e) => setMemoryLimit(e.target.value)} placeholder="256" />
                 </div>
               </div>
 
@@ -511,12 +551,18 @@ function TeacherHomework() {
               </div>
 
               <div>
-                <label className="mb-2 block text-xs text-slate-300">Starter Code (index.html)</label>
+                <label className="mb-2 flex items-center justify-between text-xs text-slate-300">
+                  <span>Starter Files JSON</span>
+                  <span className="text-slate-500">(Auto-generated)</span>
+                </label>
                 <textarea
-                  value={questionStarterCode}
-                  onChange={(e) => setQuestionStarterCode(e.target.value)}
-                  placeholder="Enter boilerplate code..."
-                  className="w-full font-mono rounded-xl border border-slate-700 bg-[#0F172A] px-4 py-3 text-white outline-none focus:border-emerald-400 min-h-[100px] text-sm"
+                  value={JSON.stringify(starterFiles, null, 2)}
+                  onChange={(e) => {
+                    try { setStarterFiles(JSON.parse(e.target.value)); } catch (err) {
+      console.error(err);
+}
+    }}
+                  className="w-full font-mono rounded-xl border border-slate-700 bg-[#0F172A] px-4 py-3 text-white outline-none focus:border-emerald-400 min-h-[150px] text-xs"
                 />
               </div>
 

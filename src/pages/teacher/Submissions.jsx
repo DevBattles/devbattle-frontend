@@ -1,33 +1,22 @@
-import React, { useEffect, useState } from "react";
+import { useState } from "react";
 import api from "@/services/api";
-import { Eye, FileCode, CheckCircle, XCircle, AlertCircle, Loader2 } from "lucide-react";
-import toast from "react-hot-toast";
+import { useQuery } from "@tanstack/react-query";
+import { Eye, FileCode, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
 
 function Submissions() {
   const [activeTab, setActiveTab] = useState("homework");
-  const [submissions, setSubmissions] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [selectedSub, setSelectedSub] = useState(null);
 
-  const fetchSubmissions = async () => {
-    try {
-      setLoading(true);
+  const { data: submissionsResponse, isLoading: loading } = useQuery({
+    queryKey: ["submissions", "teacher", activeTab],
+    queryFn: async () => {
       const endpoint = activeTab === "homework" ? "/homework/submissions" : "/contests/submissions";
       const res = await api.get(endpoint);
-      if (res.data && res.data.success) {
-        setSubmissions(res.data.data || []);
-      }
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to load submissions list.");
-    } finally {
-      setLoading(false);
-    }
-  };
+      return res.data;
+    },
+  });
 
-  useEffect(() => {
-    fetchSubmissions();
-  }, [activeTab]);
+  const submissions = submissionsResponse?.data || [];
 
   if (loading) {
     return (

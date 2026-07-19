@@ -8,33 +8,26 @@ import {
   Trophy,
   ClipboardList,
   BarChart3,
-  TrendingUp,
   Clock,
   Plus,
   ArrowRight,
   Zap,
 } from "lucide-react";
 
-import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import api from "@/services/api";
+import { Loader2 } from "lucide-react";
 
 function TeacherDashboard() {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const { data: dashboardResponse, isLoading: loading } = useQuery({
+    queryKey: ["dashboard", "teacher"],
+    queryFn: async () => {
+      const res = await api.get("/dashboard/teacher");
+      return res.data;
+    },
+  });
 
-  useEffect(() => {
-    const fetchDashboard = async () => {
-      try {
-        const res = await api.get("/dashboard/teacher");
-        setData(res.data.data);
-      } catch (err) {
-        console.error("Error loading teacher dashboard", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchDashboard();
-  }, []);
+  const data = dashboardResponse?.data;
 
   const stats = [
     { label: "Total Students", value: data?.totalStudents || 0, icon: Users, color: "emerald" },
@@ -43,18 +36,23 @@ function TeacherDashboard() {
     { label: "Contests Created", value: data?.contestsCreated || 0, icon: Trophy, color: "yellow" },
   ];
 
-  const pendingReviews = [
-    { id: 1, student: "Pending submissions", assignment: `${data?.pendingReviews || 0} items await review`, submittedAt: "Review now" },
-  ];
-
-  const recentActivity = [];
+  const pendingReviewsCount = data?.pendingReviews || 0;
+  const recentActivity = data?.recentActivity || [];
 
   const topPerformers = (data?.leaderboard || []).map((item, index) => ({
     rank: index + 1,
-    name: item.user.username,
+    name: item.user?.username || "Unknown",
     xp: item.score * 10 || 0,
     submissions: item.attempts || 0
   }));
+
+  if (loading) {
+    return (
+      <div className="flex h-[50vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -65,7 +63,7 @@ function TeacherDashboard() {
             Welcome back, Teacher! 👋
           </h1>
           <p className="text-slate-300">
-            You have 3 pending reviews and 156 active students in your classes.
+            You have {pendingReviewsCount} pending reviews and {data?.totalStudents || 0} students in your classes.
           </p>
           <div className="mt-6 flex gap-4">
             <Link
@@ -124,24 +122,22 @@ function TeacherDashboard() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {pendingReviews.map((review) => (
-                <div
-                  key={review.id}
-                  className="flex items-center justify-between rounded-xl border border-slate-700/50 bg-slate-800/30 p-4 transition hover:bg-slate-800/50"
-                >
+              {pendingReviewsCount > 0 ? (
+                <div className="flex items-center justify-between rounded-xl border border-slate-700/50 bg-slate-800/30 p-4 transition hover:bg-slate-800/50">
                   <div className="flex-1">
-                    <h4 className="font-semibold text-white">{review.student}</h4>
-                    <p className="text-sm text-slate-400">{review.assignment}</p>
-                    <p className="mt-1 text-xs text-slate-500">{review.submittedAt}</p>
+                    <h4 className="font-semibold text-white">Pending submissions</h4>
+                    <p className="text-sm text-slate-400">{pendingReviewsCount} items await review</p>
                   </div>
                   <Link
-                    to={`/teacher/submissions/${review.id}`}
+                    to="/teacher/submissions"
                     className="rounded-lg bg-yellow-500/20 px-4 py-2 text-sm font-semibold text-yellow-400 transition hover:bg-yellow-500/30"
                   >
-                    Review
+                    Review All
                   </Link>
                 </div>
-              ))}
+              ) : (
+                <p className="text-sm text-slate-400">No pending reviews</p>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -156,7 +152,7 @@ function TeacherDashboard() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {recentActivity.map((activity) => (
+              {recentActivity.length > 0 ? recentActivity.map((activity) => (
                 <div
                   key={activity.id}
                   className="flex items-center gap-4 rounded-xl border border-slate-700/50 bg-slate-800/30 p-4"
@@ -169,10 +165,12 @@ function TeacherDashboard() {
                       <span className="font-semibold">{activity.action}</span>:{" "}
                       {activity.details}
                     </p>
-                    <p className="text-xs text-slate-400">{activity.time}</p>
+                    <p className="text-xs text-slate-400">{new Date(activity.timestamp).toLocaleString()}</p>
                   </div>
                 </div>
-              ))}
+              )) : (
+                <p className="text-sm text-slate-400">No recent activity</p>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -272,47 +270,7 @@ function TeacherDashboard() {
         </Card>
       </div>
 
-      {/* Analytics Overview */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <TrendingUp className="h-5 w-5 text-emerald-400" />
-              Analytics Overview
-            </CardTitle>
-            <Link
-              to="/teacher/analytics"
-              className="text-sm text-emerald-400 hover:underline"
-            >
-              View Details
-            </Link>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="rounded-xl border border-slate-700/50 bg-slate-800/30 p-4">
-              <p className="text-sm text-slate-400">Average Score</p>
-              <p className="mt-2 text-2xl font-bold text-emerald-400">87%</p>
-              <p className="mt-1 text-xs text-emerald-400">+5% from last month</p>
-            </div>
-            <div className="rounded-xl border border-slate-700/50 bg-slate-800/30 p-4">
-              <p className="text-sm text-slate-400">Submission Rate</p>
-              <p className="mt-2 text-2xl font-bold text-blue-400">92%</p>
-              <p className="mt-1 text-xs text-blue-400">+3% from last month</p>
-            </div>
-            <div className="rounded-xl border border-slate-700/50 bg-slate-800/30 p-4">
-              <p className="text-sm text-slate-400">On-time Completion</p>
-              <p className="mt-2 text-2xl font-bold text-yellow-400">78%</p>
-              <p className="mt-1 text-xs text-yellow-400">+2% from last month</p>
-            </div>
-            <div className="rounded-xl border border-slate-700/50 bg-slate-800/30 p-4">
-              <p className="text-sm text-slate-400">AI Usage</p>
-              <p className="mt-2 text-2xl font-bold text-purple-400">1,234</p>
-              <p className="mt-1 text-xs text-purple-400">reviews this month</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+
     </div>
   );
 }

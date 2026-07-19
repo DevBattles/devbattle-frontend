@@ -13,34 +13,35 @@ import {
   ArrowRight,
 } from "lucide-react";
 
-import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import api from "@/services/api";
+import { Loader2 } from "lucide-react";
 
 function StudentDashboard() {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const { data: dashboardResponse, isLoading: loading } = useQuery({
+    queryKey: ["dashboard", "student"],
+    queryFn: async () => {
+      const res = await api.get("/dashboard/student");
+      return res.data;
+    },
+  });
 
-  useEffect(() => {
-    const fetchDashboard = async () => {
-      try {
-        const res = await api.get("/dashboard/student");
-        setData(res.data.data);
-      } catch (err) {
-        console.error("Error loading student dashboard", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchDashboard();
-  }, []);
+  const data = dashboardResponse?.data;
 
   const upcomingHomework = data?.upcomingHomework || [];
   const upcomingContests = data?.upcomingContests || [];
   const recentSubmissions = data?.recentSubmission ? [
     { id: data.recentSubmission.id, title: "Recent Assignment", score: data.recentSubmission.score, status: data.recentSubmission.status }
   ] : [];
-  const notifications = []; // Loaded dynamically if needed
+  const notifications = data?.recentActivity || []; // fallback if needed
 
+  if (loading) {
+    return (
+      <div className="flex h-[50vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -299,54 +300,23 @@ function StudentDashboard() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {notifications.map((notification) => (
+              {notifications.length > 0 ? notifications.map((notification) => (
                 <div
                   key={notification.id}
                   className="rounded-xl border border-slate-700/50 bg-slate-800/30 p-4"
                 >
-                  <p className="text-sm text-white">{notification.message}</p>
-                  <p className="mt-2 text-xs text-slate-400">{notification.time}</p>
+                  <p className="text-sm text-white">{notification.action} - {notification.details}</p>
+                  <p className="mt-2 text-xs text-slate-400">{new Date(notification.timestamp).toLocaleString()}</p>
                 </div>
-              ))}
+              )) : (
+                <p className="text-sm text-slate-400">No new notifications</p>
+              )}
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* AI Feedback Summary */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Zap className="h-5 w-5 text-purple-400" />
-            AI Feedback Summary
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div className="rounded-xl border border-slate-700/50 bg-slate-800/30 p-4">
-              <p className="text-sm text-slate-400">Code Quality</p>
-              <p className="mt-2 text-2xl font-bold text-emerald-400">Excellent</p>
-              <div className="mt-2 h-2 rounded-full bg-slate-700">
-                <div className="h-2 w-[90%] rounded-full bg-emerald-400" />
-              </div>
-            </div>
-            <div className="rounded-xl border border-slate-700/50 bg-slate-800/30 p-4">
-              <p className="text-sm text-slate-400">Best Practices</p>
-              <p className="mt-2 text-2xl font-bold text-blue-400">Good</p>
-              <div className="mt-2 h-2 rounded-full bg-slate-700">
-                <div className="h-2 w-[75%] rounded-full bg-blue-400" />
-              </div>
-            </div>
-            <div className="rounded-xl border border-slate-700/50 bg-slate-800/30 p-4">
-              <p className="text-sm text-slate-400">Optimization</p>
-              <p className="mt-2 text-2xl font-bold text-yellow-400">Needs Work</p>
-              <div className="mt-2 h-2 rounded-full bg-slate-700">
-                <div className="h-2 w-[60%] rounded-full bg-yellow-400" />
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+
 
       {/* Quick Actions */}
       <Card>

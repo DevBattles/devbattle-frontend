@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -9,60 +10,24 @@ import api from "@/services/api";
 import {
   Search,
   Clock,
-  BookOpen,
   Play,
-  CheckCircle,
-  Lock,
 } from "lucide-react";
 
 function StudentQuestionBank() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [selectedDifficulty, setSelectedDifficulty] = useState("all");
-  const [questionsList, setQuestionsList] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  const categories = [
-    "html",
-    "css",
-    "javascript",
-    "react",
-    "tailwind",
-    "nextjs",
-    "node",
-    "express",
-    "mongodb",
-    "rest_api",
-    "authentication",
-    "responsive_design",
-    "portfolio",
-    "landing_page",
-    "dashboard",
-    "netflix_clone",
-    "todo_app",
-    "bug_fixing",
-    "code_review",
-    "figma_to_react"
-  ];
-
-  const fetchQuestions = async () => {
-    try {
-      setLoading(true);
+  const { data: questionsList = [], isLoading: loading } = useQuery({
+    queryKey: ["studentQuestions"],
+    queryFn: async () => {
       const res = await api.get("/questions");
-      // filter only published questions for student view
-      const publishedOnly = (res.data.data?.data || []).filter(q => q.published);
-      setQuestionsList(publishedOnly);
-    } catch (err) {
+      return (res.data.data?.data || []).filter(q => q.published);
+    },
+    onError: (err) => {
       console.error(err);
       toast.error("Failed to load question bank.");
-    } finally {
-      setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    fetchQuestions();
-  }, []);
+  });
 
   const filteredQuestions = questionsList.filter((question) => {
     const matchesSearch =
@@ -107,11 +72,26 @@ function StudentQuestionBank() {
                 onChange={(e) => setSelectedCategory(e.target.value)}
               >
                 <SelectItem value="all">All Categories</SelectItem>
-                {categories.map((cat) => (
-                  <SelectItem key={cat} value={cat}>
-                    {cat.toUpperCase()}
-                  </SelectItem>
-                ))}
+                <SelectItem value="html">HTML</SelectItem>
+                <SelectItem value="css">CSS</SelectItem>
+                <SelectItem value="javascript">JAVASCRIPT</SelectItem>
+                <SelectItem value="react">REACT</SelectItem>
+                <SelectItem value="tailwind">TAILWIND</SelectItem>
+                <SelectItem value="nextjs">NEXTJS</SelectItem>
+                <SelectItem value="node">NODE</SelectItem>
+                <SelectItem value="express">EXPRESS</SelectItem>
+                <SelectItem value="mongodb">MONGODB</SelectItem>
+                <SelectItem value="rest_api">REST_API</SelectItem>
+                <SelectItem value="authentication">AUTHENTICATION</SelectItem>
+                <SelectItem value="responsive_design">RESPONSIVE_DESIGN</SelectItem>
+                <SelectItem value="portfolio">PORTFOLIO</SelectItem>
+                <SelectItem value="landing_page">LANDING_PAGE</SelectItem>
+                <SelectItem value="dashboard">DASHBOARD</SelectItem>
+                <SelectItem value="netflix_clone">NETFLIX_CLONE</SelectItem>
+                <SelectItem value="todo_app">TODO_APP</SelectItem>
+                <SelectItem value="bug_fixing">BUG_FIXING</SelectItem>
+                <SelectItem value="code_review">CODE_REVIEW</SelectItem>
+                <SelectItem value="figma_to_react">FIGMA_TO_REACT</SelectItem>
               </Select>
             </div>
             <div className="min-w-[150px]">

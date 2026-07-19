@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import api from "@/services/api";
 import { Shield, Users, Building, GraduationCap, Server, Loader2 } from "lucide-react";
 import toast from "react-hot-toast";
@@ -15,8 +15,10 @@ function PlatformAnalytics() {
           setStats(res.data.data);
         }
       } catch (err) {
+      console.error(err);
+
         toast.error("Failed to load platform analytics telemetry.");
-      } finally {
+    } finally {
         setLoading(false);
       }
     };

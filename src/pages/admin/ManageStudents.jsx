@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import api from "@/services/api";
-import { Users, GraduationCap, Search, Loader2 } from "lucide-react";
+import { Search, Loader2 } from "lucide-react";
 import toast from "react-hot-toast";
 
 function ManageStudents() {
@@ -16,8 +16,10 @@ function ManageStudents() {
           setStudents(res.data.data);
         }
       } catch (err) {
+      console.error(err);
+
         toast.error("Failed to load students list.");
-      } finally {
+    } finally {
         setLoading(false);
       }
     };

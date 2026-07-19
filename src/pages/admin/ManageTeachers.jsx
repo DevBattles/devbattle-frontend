@@ -1,38 +1,41 @@
-import React, { useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/services/api";
-import { ShieldCheck, ShieldAlert, CheckCircle2, XCircle, Search, Loader2 } from "lucide-react";
+import { CheckCircle2, XCircle, Search, Loader2 } from "lucide-react";
 import toast from "react-hot-toast";
 
 function ManageTeachers() {
-  const [teachers, setTeachers] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState("");
 
-  const fetchTeachers = async () => {
-    try {
+  const { data: teachers = [], isLoading } = useQuery({
+    queryKey: ["adminAllTeachers"],
+    queryFn: async () => {
       const res = await api.get("/admin/teachers");
       if (res.data && res.data.success) {
-        setTeachers(res.data.data);
+        return res.data.data;
       }
-    } catch (err) {
-      toast.error("Failed to load teachers list.");
-    } finally {
-      setLoading(false);
+      return [];
     }
-  };
+  });
 
-  useEffect(() => {
-    fetchTeachers();
-  }, []);
-
-  const toggleApproval = async (id, currentStatus) => {
-    try {
+  const toggleApprovalMutation = useMutation({
+    mutationFn: async ({ id, currentStatus }) => {
       await api.put(`/admin/teachers/${id}/approve`, { isApproved: !currentStatus });
+      return currentStatus;
+    },
+    onSuccess: (currentStatus) => {
       toast.success(currentStatus ? "Approved status revoked" : "Teacher account approved!");
-      fetchTeachers();
-    } catch (err) {
+      queryClient.invalidateQueries(["adminAllTeachers"]);
+    },
+    onError: (error) => {
+      console.error(error);
       toast.error("Failed to update teacher approval status.");
     }
+  });
+
+  const toggleApproval = (id, currentStatus) => {
+    toggleApprovalMutation.mutate({ id, currentStatus });
   };
 
   const filteredTeachers = teachers.filter(
@@ -41,7 +44,7 @@ function ManageTeachers() {
       t.email?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-emerald-400" />
@@ -103,7 +106,8 @@ function ManageTeachers() {
                     <td className="p-4 text-center">
                       <button
                         onClick={() => toggleApproval(t.id, t.isApproved)}
-                        className={`font-semibold px-4 py-2 rounded-xl transition text-xs ${
+                        disabled={toggleApprovalMutation.isPending}
+                        className={`font-semibold px-4 py-2 rounded-xl transition text-xs disabled:opacity-50 ${
                           t.isApproved
                             ? "bg-red-500/20 hover:bg-red-500/30 text-red-400"
                             : "bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400"

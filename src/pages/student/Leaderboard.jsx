@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import api from "@/services/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Input } from "@/components/ui/Input";
@@ -11,6 +13,7 @@ import {
   Award,
   Star,
   Crown,
+  Loader2,
 } from "lucide-react";
 
 function StudentLeaderboard() {
@@ -18,128 +21,35 @@ function StudentLeaderboard() {
   const [selectedFilter, setSelectedFilter] = useState("global");
   const [selectedTimeframe, setSelectedTimeframe] = useState("all");
 
-  const leaderboardData = [
-    {
-      rank: 1,
-      name: "Alice Johnson",
-      xp: 3450,
-      submissions: 28,
-      contestsWon: 5,
-      streak: 12,
-      avatar: "AJ",
-      batch: "Batch A",
-    },
-    {
-      rank: 2,
-      name: "Bob Smith",
-      xp: 3120,
-      submissions: 25,
-      contestsWon: 4,
-      streak: 8,
-      avatar: "BS",
-      batch: "Batch B",
-    },
-    {
-      rank: 3,
-      name: "Charlie Brown",
-      xp: 2890,
-      submissions: 23,
-      contestsWon: 3,
-      streak: 5,
-      avatar: "CB",
-      batch: "Batch A",
-    },
-    {
-      rank: 4,
-      name: "Diana Ross",
-      xp: 2750,
-      submissions: 22,
-      contestsWon: 3,
-      streak: 15,
-      avatar: "DR",
-      batch: "Batch C",
-    },
-    {
-      rank: 5,
-      name: "Edward King",
-      xp: 2680,
-      submissions: 21,
-      contestsWon: 2,
-      streak: 3,
-      avatar: "EK",
-      batch: "Batch B",
-    },
-    {
-      rank: 6,
-      name: "Fiona Green",
-      xp: 2540,
-      submissions: 20,
-      contestsWon: 2,
-      streak: 7,
-      avatar: "FG",
-      batch: "Batch A",
-    },
-    {
-      rank: 7,
-      name: "George White",
-      xp: 2410,
-      submissions: 19,
-      contestsWon: 2,
-      streak: 4,
-      avatar: "GW",
-      batch: "Batch C",
-    },
-    {
-      rank: 8,
-      name: "Hannah Black",
-      xp: 2350,
-      submissions: 18,
-      contestsWon: 1,
-      streak: 6,
-      avatar: "HB",
-      batch: "Batch B",
-    },
-    {
-      rank: 9,
-      name: "Ian Scott",
-      xp: 2280,
-      submissions: 17,
-      contestsWon: 1,
-      streak: 2,
-      avatar: "IS",
-      batch: "Batch A",
-    },
-    {
-      rank: 10,
-      name: "Jane Miller",
-      xp: 2150,
-      submissions: 16,
-      contestsWon: 1,
-      streak: 9,
-      avatar: "JM",
-      batch: "Batch C",
-    },
-    {
-      rank: 12,
-      name: "You",
-      xp: 1890,
-      submissions: 14,
-      contestsWon: 0,
-      streak: 3,
-      avatar: "ME",
-      batch: "Batch A",
-      isCurrentUser: true,
-    },
-  ];
+  const { data: leaderboardData, isLoading: loading } = useQuery({
+    queryKey: ["leaderboard", selectedFilter],
+    queryFn: async () => {
+      const res = await api.get(`/leaderboards?type=${selectedFilter}`);
+      return res.data;
+    }
+  });
 
-  const filteredLeaderboard = leaderboardData.filter((student) => {
+  const rawLeaderboard = leaderboardData?.data || [];
+  
+  const mappedLeaderboard = rawLeaderboard.map((item) => ({
+    rank: item.rank,
+    name: item.user?.username || "Unknown",
+    xp: item.score || 0,
+    submissions: 0,
+    contestsWon: 0,
+    streak: 0,
+    avatar: (item.user?.username || "U").substring(0, 2).toUpperCase(),
+    batch: "Global",
+    isCurrentUser: false, // This could be checked against AuthContext if needed
+  }));
+
+  const filteredLeaderboard = mappedLeaderboard.filter((student) => {
     const matchesSearch =
       student.name.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesFilter =
-      selectedFilter === "global" ||
-      (selectedFilter === "batch" && student.batch === "Batch A");
-    return matchesSearch && matchesFilter;
+    return matchesSearch;
   });
+
+
 
   const getRankIcon = (rank) => {
     if (rank === 1) return <Crown className="h-6 w-6 text-yellow-400" />;
@@ -170,7 +80,11 @@ function StudentLeaderboard() {
 
       {/* Top 3 Podium */}
       <div className="grid gap-6 sm:grid-cols-3">
-        {leaderboardData.slice(0, 3).map((student, index) => (
+        {loading ? (
+          <div className="col-span-full flex h-48 items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-emerald-400" />
+          </div>
+        ) : filteredLeaderboard.slice(0, 3).map((student, index) => (
           <Card
             key={student.rank}
             className={`relative overflow-hidden ${
@@ -261,100 +175,77 @@ function StudentLeaderboard() {
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
-            {filteredLeaderboard.map((student) => (
-              <div
-                key={student.rank}
-                className={`flex items-center justify-between rounded-xl border p-4 transition ${
-                  student.isCurrentUser
-                    ? "border-emerald-500/50 bg-emerald-500/10"
-                    : getRankBadge(student.rank) ||
-                      "border-slate-700/50 bg-slate-800/30 hover:bg-slate-800/50"
-                }`}
-              >
-                <div className="flex items-center gap-4">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500/20 font-bold text-emerald-400">
-                    {student.avatar}
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h4 className="font-semibold text-white">
-                        {student.name}
-                      </h4>
-                      {student.isCurrentUser && (
-                        <Badge variant="success" className="text-xs">
-                          You
-                        </Badge>
-                      )}
+            {loading ? (
+               <div className="flex justify-center p-8"><Loader2 className="h-6 w-6 animate-spin text-emerald-500" /></div>
+            ) : filteredLeaderboard.length === 0 ? (
+               <div className="text-center p-8 text-slate-500">No students found</div>
+            ) : (
+              filteredLeaderboard.map((student) => (
+                <div
+                  key={student.rank}
+                  className={`flex items-center justify-between rounded-xl border p-4 transition ${
+                    student.isCurrentUser
+                      ? "border-emerald-500/50 bg-emerald-500/10"
+                      : getRankBadge(student.rank) ||
+                        "border-slate-700/50 bg-slate-800/30 hover:bg-slate-800/50"
+                  }`}
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500/20 font-bold text-emerald-400">
+                      {student.avatar}
                     </div>
-                    <p className="text-sm text-slate-400">{student.batch}</p>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-semibold text-white">
+                          {student.name}
+                        </h4>
+                        {student.isCurrentUser && (
+                          <Badge variant="success" className="text-xs">
+                            You
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-sm text-slate-400">{student.batch}</p>
+                    </div>
+                  </div>
+  
+                  <div className="flex items-center gap-8">
+                    <div className="text-center">
+                      <p className="text-lg font-bold text-emerald-400">
+                        {student.xp}
+                      </p>
+                      <p className="text-xs text-slate-400">XP</p>
+                    </div>
+                    <div className="text-center hidden sm:block">
+                      <p className="text-lg font-bold text-blue-400">
+                        {student.submissions}
+                      </p>
+                      <p className="text-xs text-slate-400">Submissions</p>
+                    </div>
+                    <div className="text-center hidden md:block">
+                      <p className="text-lg font-bold text-yellow-400">
+                        {student.contestsWon}
+                      </p>
+                      <p className="text-xs text-slate-400">Wins</p>
+                    </div>
+                    <div className="text-center hidden lg:block">
+                      <p className="text-lg font-bold text-purple-400">
+                        {student.streak}
+                      </p>
+                      <p className="text-xs text-slate-400">Streak</p>
+                    </div>
+                    <div className="flex items-center justify-center w-12">
+                      {getRankIcon(student.rank)}
+                    </div>
                   </div>
                 </div>
-
-                <div className="flex items-center gap-8">
-                  <div className="text-center">
-                    <p className="text-lg font-bold text-emerald-400">
-                      {student.xp}
-                    </p>
-                    <p className="text-xs text-slate-400">XP</p>
-                  </div>
-                  <div className="text-center hidden sm:block">
-                    <p className="text-lg font-bold text-blue-400">
-                      {student.submissions}
-                    </p>
-                    <p className="text-xs text-slate-400">Submissions</p>
-                  </div>
-                  <div className="text-center hidden md:block">
-                    <p className="text-lg font-bold text-yellow-400">
-                      {student.contestsWon}
-                    </p>
-                    <p className="text-xs text-slate-400">Wins</p>
-                  </div>
-                  <div className="text-center hidden lg:block">
-                    <p className="text-lg font-bold text-purple-400">
-                      {student.streak}
-                    </p>
-                    <p className="text-xs text-slate-400">Streak</p>
-                  </div>
-                  <div className="flex items-center justify-center w-12">
-                    {getRankIcon(student.rank)}
-                  </div>
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </CardContent>
       </Card>
 
-      {/* Your Stats */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Your Performance</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="rounded-xl border border-slate-700/50 bg-slate-800/30 p-4">
-              <p className="text-sm text-slate-400">Current Rank</p>
-              <p className="mt-2 text-2xl font-bold text-emerald-400">#12</p>
-              <p className="mt-1 text-xs text-emerald-400">↑ 3 from last week</p>
-            </div>
-            <div className="rounded-xl border border-slate-700/50 bg-slate-800/30 p-4">
-              <p className="text-sm text-slate-400">Total XP</p>
-              <p className="mt-2 text-2xl font-bold text-blue-400">1,890</p>
-              <p className="mt-1 text-xs text-blue-400">+250 this week</p>
-            </div>
-            <div className="rounded-xl border border-slate-700/50 bg-slate-800/30 p-4">
-              <p className="text-sm text-slate-400">Completion Rate</p>
-              <p className="mt-2 text-2xl font-bold text-yellow-400">87%</p>
-              <p className="mt-1 text-xs text-yellow-400">Above average</p>
-            </div>
-            <div className="rounded-xl border border-slate-700/50 bg-slate-800/30 p-4">
-              <p className="text-sm text-slate-400">Current Streak</p>
-              <p className="mt-2 text-2xl font-bold text-purple-400">3 days</p>
-              <p className="mt-1 text-xs text-purple-400">Keep it up!</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+
     </div>
   );
 }

@@ -3,28 +3,105 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/Input";
 import { Select, SelectItem } from "@/components/ui/Select";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import api from "@/services/api";
+import { toast } from "react-hot-toast";
 import {
   User,
   Bell,
   Shield,
   Palette,
-  Lock,
-  Mail,
   Save,
   ToggleRight,
   ToggleLeft,
+  Loader2
 } from "lucide-react";
+import { Badge } from "@/components/ui/Badge";
 
 function Settings() {
-  const [activeTab, setActiveTab] = useState("profile");
-  const [notifications, setNotifications] = useState({
-    homework: true,
-    contests: true,
-    submissions: true,
-    certificates: true,
-    email: true,
-    push: false,
+  const { data: userResponse, isLoading } = useQuery({
+    queryKey: ["profile"],
+    queryFn: async () => {
+      const res = await api.get("/users/me");
+      return res.data;
+    },
   });
+
+  if (isLoading) {
+    return (
+      <div className="flex h-[50vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
+      </div>
+    );
+  }
+
+  return <SettingsContent userData={userResponse?.data || {}} />;
+}
+
+function SettingsContent({ userData }) {
+  const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState("profile");
+
+  const [profileForm, setProfileForm] = useState({
+    bio: userData.bio || "",
+    location: userData.location || "",
+    website: userData.website || "",
+  });
+
+  const [notifications, setNotifications] = useState({
+    emailNotifications: userData.preferences?.emailNotifications ?? true,
+    pushNotifications: userData.preferences?.pushNotifications ?? false,
+  });
+
+  const [appearance, setAppearance] = useState({
+    theme: userData.preferences?.theme || "dark",
+    language: userData.preferences?.language || "en",
+  });
+
+  // Mutations
+  const updateProfileMutation = useMutation({
+    mutationFn: async (updatedData) => {
+      const res = await api.put("/users/me/profile", updatedData);
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(["profile"]);
+      toast.success("Profile settings updated!");
+    },
+    onError: (error) => {
+      toast.error(error?.response?.data?.message || "Failed to update profile");
+    },
+  });
+
+  const updateSettingsMutation = useMutation({
+    mutationFn: async (updatedPreferences) => {
+      const res = await api.put("/users/me/settings", {
+        ...userData.preferences,
+        ...updatedPreferences
+      });
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(["profile"]);
+      toast.success("Preferences updated!");
+    },
+    onError: (error) => {
+      toast.error(error?.response?.data?.message || "Failed to update preferences");
+    },
+  });
+
+  const handleSaveProfile = () => {
+    updateProfileMutation.mutate(profileForm);
+  };
+
+  const handleSaveNotifications = () => {
+    updateSettingsMutation.mutate(notifications);
+  };
+
+  const handleSaveAppearance = () => {
+    updateSettingsMutation.mutate(appearance);
+  };
+
 
   const tabs = [
     { id: "profile", label: "Profile", icon: User },
@@ -77,14 +154,14 @@ function Settings() {
                   <label className="mb-2 block text-sm text-slate-300">
                     Username
                   </label>
-                  <Input defaultValue="John Doe" />
+                  <Input value={userData.username || ""} disabled className="opacity-50 cursor-not-allowed" />
                 </div>
 
                 <div>
                   <label className="mb-2 block text-sm text-slate-300">
                     Email
                   </label>
-                  <Input defaultValue="john@example.com" type="email" />
+                  <Input value={userData.email || ""} disabled type="email" className="opacity-50 cursor-not-allowed" />
                 </div>
 
                 <div>
@@ -92,7 +169,9 @@ function Settings() {
                     Bio
                   </label>
                   <textarea
-                    defaultValue="Passionate web developer learning React and modern technologies."
+                    value={profileForm.bio}
+                    onChange={(e) => setProfileForm({ ...profileForm, bio: e.target.value })}
+                    placeholder="Tell us about yourself..."
                     className="w-full rounded-xl border border-slate-700 bg-[#0F172A] px-4 py-3 text-white outline-none focus:border-emerald-400 min-h-[100px]"
                   />
                 </div>
@@ -101,12 +180,31 @@ function Settings() {
                   <label className="mb-2 block text-sm text-slate-300">
                     Location
                   </label>
-                  <Input defaultValue="San Francisco, CA" />
+                  <Input 
+                    value={profileForm.location}
+                    onChange={(e) => setProfileForm({ ...profileForm, location: e.target.value })}
+                    placeholder="e.g. San Francisco, CA" 
+                  />
+                </div>
+                
+                <div>
+                  <label className="mb-2 block text-sm text-slate-300">
+                    Website
+                  </label>
+                  <Input 
+                    value={profileForm.website}
+                    onChange={(e) => setProfileForm({ ...profileForm, website: e.target.value })}
+                    placeholder="e.g. https://johndoe.com" 
+                  />
                 </div>
 
-                <Button className="bg-emerald-500 text-black hover:bg-emerald-400">
-                  <Save className="h-4 w-4 mr-2" />
-                  Save Changes
+                <Button 
+                  onClick={handleSaveProfile}
+                  disabled={updateProfileMutation.isPending}
+                  className="bg-emerald-500 text-black hover:bg-emerald-400"
+                >
+                  {updateProfileMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+                  Save Profile
                 </Button>
               </CardContent>
             </Card>
@@ -122,110 +220,22 @@ function Settings() {
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="space-y-4">
-                  <h3 className="font-semibold text-white">Push Notifications</h3>
+                  <h3 className="font-semibold text-white">Email & Push</h3>
 
                   <div className="flex items-center justify-between rounded-xl border border-slate-700/50 bg-slate-800/30 p-4">
                     <div>
-                      <p className="font-medium text-white">Homework Alerts</p>
+                      <p className="font-medium text-white">Email Notifications</p>
                       <p className="text-sm text-slate-400">
-                        Get notified when new homework is assigned
+                        Receive platform updates via email
                       </p>
                     </div>
                     <button
                       onClick={() =>
-                        setNotifications({ ...notifications, homework: !notifications.homework })
+                        setNotifications({ ...notifications, emailNotifications: !notifications.emailNotifications })
                       }
                       className="text-emerald-400"
                     >
-                      {notifications.homework ? (
-                        <ToggleRight className="h-6 w-6" />
-                      ) : (
-                        <ToggleLeft className="h-6 w-6" />
-                      )}
-                    </button>
-                  </div>
-
-                  <div className="flex items-center justify-between rounded-xl border border-slate-700/50 bg-slate-800/30 p-4">
-                    <div>
-                      <p className="font-medium text-white">Contest Updates</p>
-                      <p className="text-sm text-slate-400">
-                        Get notified about upcoming contests
-                      </p>
-                    </div>
-                    <button
-                      onClick={() =>
-                        setNotifications({ ...notifications, contests: !notifications.contests })
-                      }
-                      className="text-emerald-400"
-                    >
-                      {notifications.contests ? (
-                        <ToggleRight className="h-6 w-6" />
-                      ) : (
-                        <ToggleLeft className="h-6 w-6" />
-                      )}
-                    </button>
-                  </div>
-
-                  <div className="flex items-center justify-between rounded-xl border border-slate-700/50 bg-slate-800/30 p-4">
-                    <div>
-                      <p className="font-medium text-white">Submission Reviews</p>
-                      <p className="text-sm text-slate-400">
-                        Get notified when your submission is reviewed
-                      </p>
-                    </div>
-                    <button
-                      onClick={() =>
-                        setNotifications({ ...notifications, submissions: !notifications.submissions })
-                      }
-                      className="text-emerald-400"
-                    >
-                      {notifications.submissions ? (
-                        <ToggleRight className="h-6 w-6" />
-                      ) : (
-                        <ToggleLeft className="h-6 w-6" />
-                      )}
-                    </button>
-                  </div>
-
-                  <div className="flex items-center justify-between rounded-xl border border-slate-700/50 bg-slate-800/30 p-4">
-                    <div>
-                      <p className="font-medium text-white">Certificates</p>
-                      <p className="text-sm text-slate-400">
-                        Get notified when you earn a certificate
-                      </p>
-                    </div>
-                    <button
-                      onClick={() =>
-                        setNotifications({ ...notifications, certificates: !notifications.certificates })
-                      }
-                      className="text-emerald-400"
-                    >
-                      {notifications.certificates ? (
-                        <ToggleRight className="h-6 w-6" />
-                      ) : (
-                        <ToggleLeft className="h-6 w-6" />
-                      )}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <h3 className="font-semibold text-white">Email Notifications</h3>
-
-                  <div className="flex items-center justify-between rounded-xl border border-slate-700/50 bg-slate-800/30 p-4">
-                    <div>
-                      <p className="font-medium text-white">Email Digest</p>
-                      <p className="text-sm text-slate-400">
-                        Receive daily summary via email
-                      </p>
-                    </div>
-                    <button
-                      onClick={() =>
-                        setNotifications({ ...notifications, email: !notifications.email })
-                      }
-                      className="text-emerald-400"
-                    >
-                      {notifications.email ? (
+                      {notifications.emailNotifications ? (
                         <ToggleRight className="h-6 w-6" />
                       ) : (
                         <ToggleLeft className="h-6 w-6" />
@@ -242,11 +252,11 @@ function Settings() {
                     </div>
                     <button
                       onClick={() =>
-                        setNotifications({ ...notifications, push: !notifications.push })
+                        setNotifications({ ...notifications, pushNotifications: !notifications.pushNotifications })
                       }
                       className="text-emerald-400"
                     >
-                      {notifications.push ? (
+                      {notifications.pushNotifications ? (
                         <ToggleRight className="h-6 w-6" />
                       ) : (
                         <ToggleLeft className="h-6 w-6" />
@@ -255,9 +265,13 @@ function Settings() {
                   </div>
                 </div>
 
-                <Button className="bg-emerald-500 text-black hover:bg-emerald-400">
-                  <Save className="h-4 w-4 mr-2" />
-                  Save Preferences
+                <Button 
+                  onClick={handleSaveNotifications}
+                  disabled={updateSettingsMutation.isPending}
+                  className="bg-emerald-500 text-black hover:bg-emerald-400"
+                >
+                  {updateSettingsMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+                  Save Notifications
                 </Button>
               </CardContent>
             </Card>
@@ -352,7 +366,10 @@ function Settings() {
                   <label className="mb-2 block text-sm text-slate-300">
                     Theme
                   </label>
-                  <Select defaultValue="dark">
+                  <Select 
+                    value={appearance.theme} 
+                    onValueChange={(val) => setAppearance({ ...appearance, theme: val })}
+                  >
                     <SelectItem value="dark">Dark Mode</SelectItem>
                     <SelectItem value="light">Light Mode</SelectItem>
                     <SelectItem value="system">System Default</SelectItem>
@@ -361,33 +378,12 @@ function Settings() {
 
                 <div>
                   <label className="mb-2 block text-sm text-slate-300">
-                    Accent Color
-                  </label>
-                  <div className="flex gap-3">
-                    <button className="h-10 w-10 rounded-full bg-emerald-500 ring-2 ring-emerald-400 ring-offset-2 ring-offset-slate-900" />
-                    <button className="h-10 w-10 rounded-full bg-blue-500" />
-                    <button className="h-10 w-10 rounded-full bg-purple-500" />
-                    <button className="h-10 w-10 rounded-full bg-yellow-500" />
-                    <button className="h-10 w-10 rounded-full bg-pink-500" />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm text-slate-300">
-                    Font Size
-                  </label>
-                  <Select defaultValue="medium">
-                    <SelectItem value="small">Small</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="large">Large</SelectItem>
-                  </Select>
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm text-slate-300">
                     Language
                   </label>
-                  <Select defaultValue="en">
+                  <Select 
+                    value={appearance.language} 
+                    onValueChange={(val) => setAppearance({ ...appearance, language: val })}
+                  >
                     <SelectItem value="en">English</SelectItem>
                     <SelectItem value="es">Spanish</SelectItem>
                     <SelectItem value="fr">French</SelectItem>
@@ -395,8 +391,12 @@ function Settings() {
                   </Select>
                 </div>
 
-                <Button className="bg-emerald-500 text-black hover:bg-emerald-400">
-                  <Save className="h-4 w-4 mr-2" />
+                <Button 
+                  onClick={handleSaveAppearance}
+                  disabled={updateSettingsMutation.isPending}
+                  className="bg-emerald-500 text-black hover:bg-emerald-400"
+                >
+                  {updateSettingsMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
                   Save Appearance
                 </Button>
               </CardContent>

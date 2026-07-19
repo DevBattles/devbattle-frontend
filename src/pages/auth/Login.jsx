@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { loginUser } from "@/services/auth.service";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth } from "@/context/useAuth";
 import toast from "react-hot-toast";
 
 function Login() {
@@ -39,6 +39,8 @@ toast.success("Login Successful!");
 
 navigate(getDashboardPath());
     } catch (err) {
+      console.error(err);
+
         const message =
         err.response?.data?.message ||
         "Invalid email or password.";

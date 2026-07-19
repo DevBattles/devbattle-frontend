@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import { useState, useMemo } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/services/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -12,148 +13,119 @@ import {
   Trash2,
   GraduationCap,
   Building,
-  CheckCircle,
   Loader2,
   UserPlus,
-  UserMinus,
 } from "lucide-react";
 import toast from "react-hot-toast";
 
 function TeacherBatches() {
-  const [batches, setBatches] = useState([]);
-  const [pendingStudents, setPendingStudents] = useState([]);
-  const [colleges, setColleges] = useState([]);
-  const [departments, setDepartments] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
+  const queryClient = useQueryClient();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-
-  // Form fields
   const [batchName, setBatchName] = useState("");
   const [selectedCollegeId, setSelectedCollegeId] = useState("");
   const [selectedDeptId, setSelectedDeptId] = useState("");
-  const [availableDepartments, setAvailableDepartments] = useState([]);
-
-  // Active sub-view tab: "list" | "pending"
   const [activeTab, setActiveTab] = useState("list");
-
-  // Selection map for enrolling pending students: { [studentId]: batchId }
   const [enrollSelections, setEnrollSelections] = useState({});
 
-  const fetchData = async () => {
-    try {
-      setLoading(true);
+  const { data = {}, isLoading } = useQuery({
+    queryKey: ["teacherBatchesData"],
+    queryFn: async () => {
       const [batchesRes, pendingRes, metaRes] = await Promise.all([
         api.get("/batches"),
         api.get("/batches/students/pending"),
         api.get("/batches/colleges-departments"),
       ]);
+      return {
+        batches: batchesRes.data.data || [],
+        pendingStudents: pendingRes.data.data || [],
+        colleges: metaRes.data.data?.colleges || [],
+        departments: metaRes.data.data?.departments || [],
+      };
+    },
+  });
 
-      setBatches(batchesRes.data.data || []);
-      setPendingStudents(pendingRes.data.data || []);
-      setColleges(metaRes.data.data?.colleges || []);
-      setDepartments(metaRes.data.data?.departments || []);
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to load batch management data.");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { batches = [], pendingStudents = [], colleges = [], departments = [] } = data;
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  // Filter departments when college selection changes
-  useEffect(() => {
-    if (!selectedCollegeId) {
-      setAvailableDepartments([]);
-      return;
-    }
-    const filtered = departments.filter((d) => d.collegeId === selectedCollegeId);
-    setAvailableDepartments(filtered);
-    setSelectedDeptId("");
+  const availableDepartments = useMemo(() => {
+    if (!selectedCollegeId) return [];
+    return departments.filter((d) => d.collegeId === selectedCollegeId);
   }, [selectedCollegeId, departments]);
 
-  const handleCreateBatch = async () => {
-    if (!batchName.trim() || !selectedCollegeId || !selectedDeptId) {
-      toast.error("Please fill in all the batch creation details.");
-      return;
-    }
-
-    setIsSaving(true);
-    try {
+  const createBatchMutation = useMutation({
+    mutationFn: async () => {
       await api.post("/batches", {
         name: batchName,
         collegeId: selectedCollegeId,
         departmentId: selectedDeptId,
       });
-
+    },
+    onSuccess: () => {
       toast.success("Batch created successfully!");
       setBatchName("");
       setSelectedCollegeId("");
       setSelectedDeptId("");
       setIsCreateModalOpen(false);
-      fetchData();
-    } catch (err) {
-      console.error(err);
-      toast.error(err.response?.data?.message || "Failed to create batch.");
-    } finally {
-      setIsSaving(false);
+      queryClient.invalidateQueries(["teacherBatchesData"]);
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.message || "Failed to create batch.");
     }
-  };
+  });
 
-  const handleDeleteBatch = async (batchId) => {
-    if (!confirm("Are you sure you want to delete this batch? All enrolled students will be unassigned.")) return;
-    try {
-      await api.delete(`/batches/${batchId}`);
-      toast.success("Batch deleted successfully.");
-      fetchData();
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to delete batch.");
-    }
-  };
-
-  const handleEnrollStudent = async (studentId) => {
-    const batchId = enrollSelections[studentId];
-    if (!batchId) {
-      toast.error("Please select a target batch to enroll the student.");
+  const handleCreateBatch = () => {
+    if (!batchName.trim() || !selectedCollegeId || !selectedDeptId) {
+      toast.error("Please fill in all the batch creation details.");
       return;
     }
+    createBatchMutation.mutate();
+  };
 
-    try {
+  const deleteBatchMutation = useMutation({
+    mutationFn: async (batchId) => {
+      await api.delete(`/batches/${batchId}`);
+    },
+    onSuccess: () => {
+      toast.success("Batch deleted successfully.");
+      queryClient.invalidateQueries(["teacherBatchesData"]);
+    },
+    onError: () => {
+      toast.error("Failed to delete batch.");
+    }
+  });
+
+  const handleDeleteBatch = (batchId) => {
+    if (!confirm("Are you sure you want to delete this batch? All enrolled students will be unassigned.")) return;
+    deleteBatchMutation.mutate(batchId);
+  };
+
+  const enrollStudentMutation = useMutation({
+    mutationFn: async ({ batchId, studentId }) => {
       await api.post(`/batches/${batchId}/enroll`, { studentId });
+    },
+    onSuccess: (_, { studentId }) => {
       toast.success("Student successfully enrolled!");
-      
-      // Clear selection
       setEnrollSelections((prev) => {
         const next = { ...prev };
         delete next[studentId];
         return next;
       });
-
-      fetchData();
-    } catch (err) {
-      console.error(err);
+      queryClient.invalidateQueries(["teacherBatchesData"]);
+    },
+    onError: () => {
       toast.error("Failed to enroll student.");
     }
-  };
+  });
 
-  const handleUnenrollStudent = async (batchId, studentId) => {
-    if (!confirm("Are you sure you want to remove this student from the batch?")) return;
-    try {
-      await api.post(`/batches/${batchId}/unenroll`, { studentId });
-      toast.success("Student unenrolled successfully.");
-      fetchData();
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to unenroll student.");
+  const handleEnrollStudent = (studentId) => {
+    const batchId = enrollSelections[studentId];
+    if (!batchId) {
+      toast.error("Please select a target batch to enroll the student.");
+      return;
     }
+    enrollStudentMutation.mutate({ batchId, studentId });
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-emerald-400" />
@@ -163,7 +135,6 @@ function TeacherBatches() {
 
   return (
     <div className="space-y-6">
-      {/* Header Banner */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#111827]/50 border border-slate-700/50 rounded-2xl p-6">
         <div>
           <h2 className="text-xl font-bold text-white">Batch Management</h2>
@@ -178,14 +149,11 @@ function TeacherBatches() {
         </Button>
       </div>
 
-      {/* Tabs */}
       <div className="flex gap-4 border-b border-slate-700 pb-px">
         <button
           onClick={() => setActiveTab("list")}
           className={`pb-3 text-sm font-semibold transition border-b-2 ${
-            activeTab === "list"
-              ? "border-emerald-500 text-emerald-400"
-              : "border-transparent text-slate-400 hover:text-white"
+            activeTab === "list" ? "border-emerald-500 text-emerald-400" : "border-transparent text-slate-400 hover:text-white"
           }`}
         >
           Active Batches ({batches.length})
@@ -193,9 +161,7 @@ function TeacherBatches() {
         <button
           onClick={() => setActiveTab("pending")}
           className={`pb-3 text-sm font-semibold transition border-b-2 ${
-            activeTab === "pending"
-              ? "border-emerald-500 text-emerald-400"
-              : "border-transparent text-slate-400 hover:text-white"
+            activeTab === "pending" ? "border-emerald-500 text-emerald-400" : "border-transparent text-slate-400 hover:text-white"
           }`}
         >
           Pending Assignments ({pendingStudents.length})
@@ -213,15 +179,10 @@ function TeacherBatches() {
               <Card key={batch.id} className="border-slate-700/50 hover:border-emerald-500/50 transition">
                 <CardHeader className="flex justify-between items-start">
                   <div>
-                    <Badge variant="success" className="mb-2">
-                      {batch.name}
-                    </Badge>
+                    <Badge variant="success" className="mb-2">{batch.name}</Badge>
                     <CardTitle className="text-lg text-white font-bold">{batch.name}</CardTitle>
                   </div>
-                  <button
-                    onClick={() => handleDeleteBatch(batch.id)}
-                    className="text-slate-500 hover:text-red-400 transition"
-                  >
+                  <button onClick={() => handleDeleteBatch(batch.id)} className="text-slate-500 hover:text-red-400 transition">
                     <Trash2 className="h-5 w-5" />
                   </button>
                 </CardHeader>
@@ -267,29 +228,18 @@ function TeacherBatches() {
                   <tr key={student.id} className="hover:bg-slate-800/30 transition">
                     <td className="p-4 font-semibold text-white">{student.username}</td>
                     <td className="p-4">{student.email}</td>
-                    <td className="p-4 text-slate-400">
-                      {new Date(student.createdAt).toLocaleDateString()}
-                    </td>
+                    <td className="p-4 text-slate-400">{new Date(student.createdAt).toLocaleDateString()}</td>
                     <td className="p-4">
                       {batches.length === 0 ? (
                         <span className="text-red-400 text-xs">Create a batch first</span>
                       ) : (
                         <Select
                           value={enrollSelections[student.id] || ""}
-                          onChange={(e) =>
-                            setEnrollSelections((prev) => ({
-                              ...prev,
-                              [student.id]: e.target.value,
-                            }))
-                          }
+                          onChange={(e) => setEnrollSelections((prev) => ({ ...prev, [student.id]: e.target.value }))}
                           className="max-w-[200px]"
                         >
                           <SelectItem value="">Select Batch...</SelectItem>
-                          {batches.map((b) => (
-                            <SelectItem key={b.id} value={b.id}>
-                              {b.name}
-                            </SelectItem>
-                          ))}
+                          {batches.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
                         </Select>
                       )}
                     </td>
@@ -311,7 +261,6 @@ function TeacherBatches() {
         </div>
       )}
 
-      {/* Create Batch Modal */}
       <Modal
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
@@ -327,22 +276,19 @@ function TeacherBatches() {
               placeholder="e.g. Batch-2026"
             />
           </div>
-
           <div>
             <label className="mb-2 block text-sm text-slate-300">College</label>
             <Select
               value={selectedCollegeId}
-              onChange={(e) => setSelectedCollegeId(e.target.value)}
+              onChange={(e) => {
+                setSelectedCollegeId(e.target.value);
+                setSelectedDeptId("");
+              }}
             >
               <SelectItem value="">Select College...</SelectItem>
-              {colleges.map((college) => (
-                <SelectItem key={college.id} value={college.id}>
-                  {college.name}
-                </SelectItem>
-              ))}
+              {colleges.map((college) => <SelectItem key={college.id} value={college.id}>{college.name}</SelectItem>)}
             </Select>
           </div>
-
           <div>
             <label className="mb-2 block text-sm text-slate-300">Department</label>
             <Select
@@ -351,14 +297,9 @@ function TeacherBatches() {
               disabled={!selectedCollegeId}
             >
               <SelectItem value="">Select Department...</SelectItem>
-              {availableDepartments.map((dept) => (
-                <SelectItem key={dept.id} value={dept.id}>
-                  {dept.name}
-                </SelectItem>
-              ))}
+              {availableDepartments.map((dept) => <SelectItem key={dept.id} value={dept.id}>{dept.name}</SelectItem>)}
             </Select>
           </div>
-
           <div className="flex justify-end gap-3 pt-4 border-t border-slate-700/50">
             <Button
               onClick={() => setIsCreateModalOpen(false)}
@@ -369,10 +310,10 @@ function TeacherBatches() {
             </Button>
             <Button
               onClick={handleCreateBatch}
-              disabled={isSaving}
+              disabled={createBatchMutation.isPending}
               className="bg-emerald-500 text-black hover:bg-emerald-400"
             >
-              {isSaving ? "Creating..." : "Create Batch"}
+              {createBatchMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create Batch"}
             </Button>
           </div>
         </div>

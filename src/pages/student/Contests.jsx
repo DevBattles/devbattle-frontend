@@ -1,36 +1,30 @@
-import { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { Card, CardContent } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Input } from "@/components/ui/Input";
-import { Select, SelectItem } from "@/components/ui/Select";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import api from "@/services/api";
 import {
   Search,
-  Trophy,
-  Users,
   Clock,
   Play,
   CheckCircle,
   Calendar,
-  Award,
+  Loader2,
 } from "lucide-react";
 
 function StudentContests() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedStatus, setSelectedStatus] = useState("all");
-  const [contestsList, setContestsList] = useState([]);
-  const [registrations, setRegistrations] = useState({}); // { [contestId]: boolean }
-  const [loading, setLoading] = useState(true);
 
-  const fetchContests = async () => {
-    try {
-      setLoading(true);
+  const { data, isLoading: loading } = useQuery({
+    queryKey: ["contests", "student"],
+    queryFn: async () => {
       const res = await api.get("/contests");
       const list = res.data.data?.data || res.data.data || [];
-      setContestsList(list);
 
       // Check registration for each contest
       const regMap = {};
@@ -39,63 +33,65 @@ function StudentContests() {
           try {
             await api.get(`/contests/${c.id}/questions`);
             regMap[c.id] = true;
-          } catch (e) {
+          } catch {
             regMap[c.id] = false;
           }
         })
       );
-      setRegistrations(regMap);
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to load contests.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchContests();
-  }, []);
-
-  const handleRegister = async (contestId) => {
-    try {
-      await api.post(`/contests/${contestId}/join`);
-      toast.success("Successfully registered for contest!");
-      setRegistrations((prev) => ({ ...prev, [contestId]: true }));
-    } catch (err) {
-      console.error(err);
-      toast.error(err.response?.data?.message || "Failed to register for contest.");
-    }
-  };
-
-  const handleStartContest = async (contestId) => {
-    try {
-      // Call start timer
-      await api.post(`/contests/${contestId}/start`);
-      // Fetch questions to find the first question ID
-      const qRes = await api.get(`/contests/${contestId}/questions`);
-      const questions = qRes.data.data || [];
       
+      return { contestsList: list, registrations: regMap };
+    },
+  });
+
+  const contestsList = data?.contestsList || [];
+  const registrations = data?.registrations || {};
+
+  const registerMutation = useMutation({
+    mutationFn: async (contestId) => {
+      await api.post(`/contests/${contestId}/join`);
+      return contestId;
+    },
+    onSuccess: (contestId) => {
+      toast.success("Successfully registered for contest!");
+      // Optimistically update the registration status
+      queryClient.setQueryData(["contests", "student"], (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          registrations: { ...old.registrations, [contestId]: true }
+        };
+      });
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.message || "Failed to register for contest.");
+    }
+  });
+
+  const handleRegister = (contestId) => {
+    registerMutation.mutate(contestId);
+  };
+
+  const startContestMutation = useMutation({
+    mutationFn: async (contestId) => {
+      await api.post(`/contests/${contestId}/start`);
+      const qRes = await api.get(`/contests/${contestId}/questions`);
+      return { contestId, questions: qRes.data.data || [] };
+    },
+    onSuccess: ({ contestId, questions }) => {
       if (questions.length === 0) {
         toast.error("No questions in this contest yet.");
         return;
       }
-      
       const firstQuestionId = questions[0].questionId || questions[0].id;
-      // Navigate to solve workspace passing questionId and contestId as query parameter
       navigate(`/student/workspace/${firstQuestionId}?contestId=${contestId}`);
-    } catch (err) {
-      console.error(err);
+    },
+    onError: () => {
       toast.error("Failed to start contest.");
     }
-  };
+  });
 
-  const getDaysRemaining = (startTime) => {
-    const start = new Date(startTime);
-    const now = new Date();
-    const diffTime = start - now;
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays;
+  const handleStartContest = (contestId) => {
+    startContestMutation.mutate(contestId);
   };
 
   const filteredContests = contestsList.filter((contest) => {
@@ -139,7 +135,9 @@ function StudentContests() {
       {/* Contests List */}
       <div className="space-y-4">
         {loading ? (
-          <p className="text-slate-400">Loading contests...</p>
+          <div className="flex h-32 items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
+          </div>
         ) : filteredContests.length === 0 ? (
           <p className="text-slate-500">No contests available.</p>
         ) : (
@@ -206,8 +204,10 @@ function StudentContests() {
                         ) : (
                           <button
                             onClick={() => handleRegister(contest.id)}
+                            disabled={registerMutation.isPending}
                             className="flex items-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-500 px-6 py-2.5 font-semibold text-white transition cursor-pointer"
                           >
+                            {registerMutation.isPending && registerMutation.variables === contest.id ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
                             Register Now
                           </button>
                         )
@@ -215,16 +215,19 @@ function StudentContests() {
                         isRegistered ? (
                           <button
                             onClick={() => handleStartContest(contest.id)}
+                            disabled={startContestMutation.isPending}
                             className="flex items-center gap-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 px-6 py-2.5 font-semibold text-black transition cursor-pointer"
                           >
-                            <Play className="h-4 w-4" />
+                            {startContestMutation.isPending && startContestMutation.variables === contest.id ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Play className="h-4 w-4" />}
                             Start Contest
                           </button>
                         ) : (
                           <button
                             onClick={() => handleRegister(contest.id)}
+                            disabled={registerMutation.isPending}
                             className="flex items-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-500 px-6 py-2.5 font-semibold text-white transition cursor-pointer"
                           >
+                            {registerMutation.isPending && registerMutation.variables === contest.id ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
                             Register & Join
                           </button>
                         )

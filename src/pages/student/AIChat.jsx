@@ -3,18 +3,14 @@ import { useSearchParams } from "react-router-dom";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/Input";
-import { Select, SelectItem } from "@/components/ui/Select";
 import api from "@/services/api";
 import {
   Send,
   Bot,
   User,
-  Code,
   Zap,
-  MessageSquare,
   Trash2,
   Copy,
-  Check,
 } from "lucide-react";
 
 function AIChat() {
@@ -67,8 +63,10 @@ function AIChat() {
             }
           ]);
         } catch (err) {
+      console.error(err);
+
           console.error("Failed to load question details for chat", err);
-        }
+    }
       };
       fetchQuestion();
     }
@@ -135,6 +133,8 @@ function AIChat() {
 
       setMessages((prev) => [...prev, aiResponse]);
     } catch (err) {
+      console.error(err);
+
       console.warn("AI Backend request failed.", err);
       const errorMsg = err.response?.data?.error?.details || err.response?.data?.message || err.message || "Failed to reach AI Backend";
       const aiResponse = {
@@ -142,64 +142,11 @@ function AIChat() {
         role: "assistant",
         content: `Error: ${errorMsg}`,
         timestamp: new Date(),
-      };
+    };
       setMessages((prev) => [...prev, aiResponse]);
     } finally {
       setIsTyping(false);
     }
-  };
-
-  const generateAIResponse = (userInput, topic) => {
-    const responses = {
-      general: [
-        "I'd be happy to help you with that! Could you provide more details about what you're trying to achieve?",
-        "That's a great question. Let me break it down for you step by step.",
-        "I can definitely assist with this. Here's what I recommend...",
-      ],
-      react: [
-        "For React, I recommend using hooks like useState and useEffect for state management. Would you like me to show you an example?",
-        "React components should be kept small and focused. Let me help you refactor this.",
-        "For React performance, consider using useMemo and useCallback for expensive operations.",
-      ],
-      node: [
-        "In Node.js, you can use the built-in fs module for file operations. Here's how...",
-        "For Express.js, middleware functions are perfect for handling request processing.",
-        "Node.js async/await makes handling asynchronous operations much cleaner.",
-      ],
-      javascript: [
-        "JavaScript closures are powerful - they allow functions to access variables from their outer scope.",
-        "ES6+ features like arrow functions and destructuring can make your code more concise.",
-        "JavaScript promises and async/await are essential for handling asynchronous operations.",
-      ],
-      html: [
-        "Semantic HTML elements like <header>, <nav>, and <main> improve accessibility and SEO.",
-        "HTML5 introduced many new elements and APIs. Let me show you some useful ones.",
-        "For forms, always use proper label elements and input types for better accessibility.",
-      ],
-      css: [
-        "CSS Grid and Flexbox are powerful layout tools. Grid is great for 2D layouts, while Flexbox excels at 1D layouts.",
-        "CSS custom properties (variables) make theming and maintenance much easier.",
-        "For responsive design, always use relative units and media queries effectively.",
-      ],
-      tailwind: [
-        "Tailwind's utility-first approach allows you to build designs directly in your HTML.",
-        "You can extend Tailwind's theme in your tailwind.config.js file for custom values.",
-        "Tailwind's @apply directive is useful for extracting common utility patterns.",
-      ],
-      debugging: [
-        "Let me help you debug this. First, check the browser console for any error messages.",
-        "Using console.log strategically can help identify where the issue occurs.",
-        "The Chrome DevTools debugger is powerful for stepping through code execution.",
-      ],
-      "project-review": [
-        "I'd be happy to review your project! Please share the code or describe the architecture.",
-        "For project reviews, I look at code quality, performance, security, and best practices.",
-        "Let me provide feedback on your project structure and suggest improvements.",
-      ],
-    };
-
-    const topicResponses = responses[topic] || responses.general;
-    return topicResponses[Math.floor(Math.random() * topicResponses.length)];
   };
 
   const handleClearChat = () => {

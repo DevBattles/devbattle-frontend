@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import Container from "./Container";
 import Logo from "./Logo";
 import { NAV_LINKS } from "@/constants/navigation";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth } from "@/context/useAuth";
 
 function Navbar() {
   const navigate = useNavigate();
