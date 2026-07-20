@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import api from "@/services/api";
+import api, { baseURL } from "@/services/api";
 import { Award, Download, Share2, ShieldCheck, Loader2 } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -93,7 +93,7 @@ function Certificates() {
                     Copy Link
                   </button>
                   <a
-                    href={`${import.meta.env.VITE_API_URL}/certificates/download/${cert.verificationCode}`}
+                    href={`${baseURL}/certificates/download/${cert.verificationCode}`}
                     target="_blank"
                     rel="noreferrer"
                     className="flex-1 flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-black font-bold py-2.5 rounded-lg transition text-center"

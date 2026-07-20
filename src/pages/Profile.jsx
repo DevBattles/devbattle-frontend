@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/Input";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import api from "@/services/api";
+import api, { baseURL } from "@/services/api";
 import { toast } from "react-hot-toast";
 import {
   Mail,
@@ -23,7 +23,7 @@ function Profile() {
   const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
   const fileInputRef = useRef(null);
-  const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+  const API_BASE_URL = baseURL.replace(/\/api\/?$/, "");
 
   // Fetch Profile
   const { data: profileResponse, isLoading } = useQuery({
