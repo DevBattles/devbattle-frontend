@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AuthContext } from "./AuthContextObj";
 
 export function AuthProvider({ children }) {
@@ -8,6 +8,18 @@ export function AuthProvider({ children }) {
   });
   const [token, setToken] = useState(() => localStorage.getItem("token"));
   const [loading] = useState(false);
+
+  useEffect(() => {
+    const theme = user?.preferences?.theme || "dark";
+    document.documentElement.setAttribute("data-theme", theme);
+    if (theme === "light") {
+      document.documentElement.classList.add("light");
+      document.documentElement.classList.remove("dark");
+    } else {
+      document.documentElement.classList.add("dark");
+      document.documentElement.classList.remove("light");
+    }
+  }, [user]);
 
   const login = (userData, jwt) => {
     localStorage.setItem("token", jwt);
