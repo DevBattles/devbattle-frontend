@@ -64,15 +64,19 @@ function SettingsContent({ userData }) {
     language: userData.preferences?.language || "en",
   });
 
+
   // Mutations
   const updateProfileMutation = useMutation({
     mutationFn: async (updatedData) => {
       const res = await api.put("/users/me/profile", updatedData);
       return res.data;
     },
-    onSuccess: () => {
+    onSuccess: (res) => {
       queryClient.invalidateQueries(["profile"]);
       toast.success("Profile settings updated!");
+      if (res?.data) {
+        login(res.data, localStorage.getItem("token"));
+      }
     },
     onError: (error) => {
       toast.error(error?.response?.data?.message || "Failed to update profile");
@@ -87,9 +91,12 @@ function SettingsContent({ userData }) {
       });
       return res.data;
     },
-    onSuccess: () => {
+    onSuccess: (res) => {
       queryClient.invalidateQueries(["profile"]);
       toast.success("Preferences updated!");
+      if (res?.data) {
+        login(res.data, localStorage.getItem("token"));
+      }
     },
     onError: (error) => {
       toast.error(error?.response?.data?.message || "Failed to update preferences");

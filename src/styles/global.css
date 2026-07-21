@@ -44,3 +44,79 @@ body {
   scrollbar-width: thin;
   scrollbar-color: #1e293b transparent;
 }
+
+/* --- LIGHT THEME STYLES --- */
+html[data-theme='light'] {
+  --background: #f8fafc;
+  --surface: #ffffff;
+  --card: #ffffff;
+  --border: #e2e8f0;
+  --text: #0f172a;
+  --muted: #64748b;
+  --primary: #10b981;
+  --secondary: #059669;
+  --accent: #0891b2;
+}
+
+html[data-theme='light'] body {
+  background-color: var(--background) !important;
+  color: var(--text) !important;
+}
+
+/* Light Theme Overrides for hardcoded dark Tailwind classes */
+html[data-theme='light'] .bg-\[\#050816\],
+html[data-theme='light'] .bg-\[\#050815\],
+html[data-theme='light'] .bg-\[\#0b0f19\],
+html[data-theme='light'] .bg-slate-950 {
+  background-color: var(--background) !important;
+}
+
+html[data-theme='light'] .bg-\[\#111827\],
+html[data-theme='light'] .bg-\[\#111827\]\/30,
+html[data-theme='light'] .bg-\[\#111827\]\/40,
+html[data-theme='light'] .bg-\[\#111827\]\/50,
+html[data-theme='light'] .bg-\[\#0F172A\],
+html[data-theme='light'] .bg-slate-900,
+html[data-theme='light'] .bg-slate-900\/40,
+html[data-theme='light'] .bg-slate-900\/50,
+html[data-theme='light'] .bg-slate-800,
+html[data-theme='light'] .bg-slate-800\/30,
+html[data-theme='light'] .bg-slate-800\/50,
+html[data-theme='light'] .bg-\[\#1e293b\]\/20,
+html[data-theme='light'] .bg-slate-900\/30,
+html[data-theme='light'] .bg-slate-900\/20,
+html[data-theme='light'] .bg-slate-900\/10 {
+  background-color: var(--surface) !important;
+}
+
+/* Card overrides specifically */
+html[data-theme='light'] .bg-\[\#111827\]\/30,
+html[data-theme='light'] .bg-slate-800\/30 {
+  background-color: #f1f5f9 !important;
+}
+
+/* Text overrides */
+html[data-theme='light'] .text-white,
+html[data-theme='light'] .text-slate-100,
+html[data-theme='light'] .text-slate-200,
+html[data-theme='light'] .text-gray-100,
+html[data-theme='light'] .text-gray-200 {
+  color: var(--text) !important;
+}
+
+html[data-theme='light'] .text-slate-300,
+html[data-theme='light'] .text-slate-400,
+html[data-theme='light'] .text-gray-300,
+html[data-theme='light'] .text-gray-400 {
+  color: var(--muted) !important;
+}
+
+/* Border overrides */
+html[data-theme='light'] .border-slate-700,
+html[data-theme='light'] .border-slate-700\/50,
+html[data-theme='light'] .border-slate-800,
+html[data-theme='light'] .border-slate-800\/50,
+html[data-theme='light'] .border-slate-600,
+html[data-theme='light'] .border-\[\#1e293b\]\/60 {
+  border-color: var(--border) !important;
+}
