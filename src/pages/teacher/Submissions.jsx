@@ -71,9 +71,10 @@ function Submissions() {
                 <tr className="border-b border-slate-700 bg-slate-800/40 text-slate-400 font-semibold">
                   <th className="p-4">Student</th>
                   <th className="p-4">{activeTab === "homework" ? "Homework Title" : "Contest Title"}</th>
+                  <th className="p-4 text-center">Status</th>
                   <th className="p-4 text-center">Score</th>
                   <th className="p-4 text-center">Grade</th>
-                  <th className="p-4">Date</th>
+                  <th className="p-4">Submission Time</th>
                   <th className="p-4 text-center">Actions</th>
                 </tr>
               </thead>
@@ -81,20 +82,27 @@ function Submissions() {
                 {submissions.map((sub) => (
                   <tr key={sub.id} className="hover:bg-slate-800/30 transition">
                     <td className="p-4 font-semibold text-white">{sub.student?.username || "Student"}</td>
-                    <td className="p-4">{activeTab === "homework" ? (sub.homework?.title || "Challenge") : (sub.contest?.title || "Contest Challenge")}</td>
-                    <td className="p-4 text-center font-bold text-emerald-400">{sub.score}%</td>
+                    <td className="p-4">{activeTab === "homework" ? (sub.homework?.title || "Homework Challenge") : (sub.contest?.title || "Contest Challenge")}</td>
                     <td className="p-4 text-center">
-                      <span className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-3 py-1 rounded-full text-xs font-semibold">
-                        {sub.grade || "C"}
+                      <span className={`px-2.5 py-1 rounded-full text-xs font-semibold uppercase tracking-wider ${
+                        sub.status === 'graded' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20'
+                      }`}>
+                        {sub.status || 'pending'}
+                      </span>
+                    </td>
+                    <td className="p-4 text-center font-bold text-emerald-400">{sub.score !== undefined && sub.score !== null ? `${sub.score}%` : 'N/A'}</td>
+                    <td className="p-4 text-center">
+                      <span className="bg-blue-500/10 border border-blue-500/20 text-blue-400 px-3 py-1 rounded-full text-xs font-semibold">
+                        {sub.grade || "N/A"}
                       </span>
                     </td>
                     <td className="p-4 text-xs text-slate-400">
-                      {sub.createdAt ? new Date(sub.createdAt).toLocaleDateString() : "Recently"}
+                      {sub.submittedAt || sub.createdAt ? new Date(sub.submittedAt || sub.createdAt).toLocaleString() : "Recently"}
                     </td>
                     <td className="p-4 text-center">
                       <button
                         onClick={() => setSelectedSub(sub)}
-                        className="p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-emerald-400 rounded-xl transition"
+                        className="p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-emerald-400 rounded-xl transition cursor-pointer"
                         title="View Details"
                       >
                         <Eye className="h-4 w-4" />
@@ -116,12 +124,15 @@ function Submissions() {
               <div>
                 <h3 className="text-xl font-bold text-white">Review Submission</h3>
                 <p className="text-xs text-slate-400 mt-1">
-                  Submitted by {selectedSub.student?.username} for {selectedSub.homework?.title || selectedSub.contest?.title || "Challenge"}
+                  Submitted by <span className="text-emerald-400 font-semibold">{selectedSub.student?.username || "Student"}</span> ({selectedSub.student?.email}) for <span className="text-white font-semibold">{selectedSub.homework?.title || selectedSub.contest?.title || "Assignment"}</span>
+                </p>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Submitted At: {selectedSub.submittedAt || selectedSub.createdAt ? new Date(selectedSub.submittedAt || selectedSub.createdAt).toLocaleString() : "Recently"}
                 </p>
               </div>
               <button
                 onClick={() => setSelectedSub(null)}
-                className="text-slate-400 hover:text-white transition"
+                className="text-slate-400 hover:text-white transition cursor-pointer text-lg font-bold px-2"
               >
                 ✕
               </button>
@@ -132,25 +143,41 @@ function Submissions() {
               <div className="grid grid-cols-3 gap-4 text-center">
                 <div className="bg-[#0F172A] border border-slate-800 rounded-xl p-4">
                   <p className="text-xs text-slate-400">Final Score</p>
-                  <p className="text-3xl font-extrabold text-emerald-400 mt-1">{selectedSub.score}%</p>
+                  <p className="text-3xl font-extrabold text-emerald-400 mt-1">{selectedSub.score !== undefined && selectedSub.score !== null ? `${selectedSub.score}%` : 'N/A'}</p>
                 </div>
                 <div className="bg-[#0F172A] border border-slate-800 rounded-xl p-4">
                   <p className="text-xs text-slate-400">Assigned Grade</p>
-                  <p className="text-3xl font-extrabold text-blue-400 mt-1">{selectedSub.grade || "C"}</p>
+                  <p className="text-3xl font-extrabold text-blue-400 mt-1">{selectedSub.grade || "N/A"}</p>
                 </div>
                 <div className="bg-[#0F172A] border border-slate-800 rounded-xl p-4">
-                  <p className="text-xs text-slate-400">AI Verified</p>
-                  <p className="text-sm font-semibold text-emerald-400 mt-2 flex items-center justify-center gap-1">
-                    <CheckCircle className="h-4 w-4" /> Yes
+                  <p className="text-xs text-slate-400">Submission Status</p>
+                  <p className="text-sm font-semibold text-emerald-400 mt-2 flex items-center justify-center gap-1 capitalize">
+                    <CheckCircle className="h-4 w-4" /> {selectedSub.status || 'pending'}
                   </p>
                 </div>
               </div>
+
+              {/* GitHub Repo link if present */}
+              {selectedSub.githubRepo && (
+                <div className="bg-[#0F172A] border border-slate-800 rounded-xl p-4 flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">GitHub Repository</p>
+                    <a href={selectedSub.githubRepo} target="_blank" rel="noreferrer" className="text-sm text-blue-400 hover:underline font-mono mt-1 block">
+                      {selectedSub.githubRepo}
+                    </a>
+                  </div>
+                </div>
+              )}
 
               {/* Code Editor Preview */}
               <div className="space-y-2">
                 <h4 className="font-bold text-white text-sm">Submitted Files Code</h4>
                 <div className="bg-[#0F172A] border border-slate-800 rounded-xl p-4 overflow-auto max-h-60 font-mono text-xs text-slate-300 whitespace-pre-wrap">
-                  {selectedSub.code || "// No code content submitted"}
+                  {typeof selectedSub.files === 'object' && selectedSub.files !== null
+                    ? Object.entries(selectedSub.files)
+                        .map(([name, data]) => `// === ${name} ===\n${typeof data === 'string' ? data : data?.content || ''}`)
+                        .join('\n\n')
+                    : selectedSub.code || selectedSub.files || "// No code content submitted"}
                 </div>
               </div>
 
@@ -160,29 +187,31 @@ function Submissions() {
                 
                 {selectedSub.feedback ? (
                   <div className="space-y-4">
-                    <div className="bg-[#0F172A] border border-slate-850 rounded-xl p-4 text-sm text-slate-300 italic leading-relaxed">
-                      "{selectedSub.feedback.generalFeedback || "No general feedback summary available."}"
+                    <div className="bg-[#0F172A] border border-slate-800 rounded-xl p-4 text-sm text-slate-300 italic leading-relaxed">
+                      "{typeof selectedSub.feedback === 'object' ? selectedSub.feedback.generalFeedback || JSON.stringify(selectedSub.feedback) : selectedSub.feedback}"
                     </div>
 
-                    <div className="grid sm:grid-cols-2 gap-4 text-sm">
-                      <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-4 space-y-2">
-                        <span className="font-bold text-emerald-400 block">Strengths</span>
-                        <ul className="list-disc pl-4 space-y-1 text-slate-300 text-xs">
-                          {selectedSub.feedback.strengths?.map((str, idx) => (
-                            <li key={idx}>{str}</li>
-                          )) || <li>None noted.</li>}
-                        </ul>
+                    {typeof selectedSub.feedback === 'object' && (
+                      <div className="grid sm:grid-cols-2 gap-4 text-sm">
+                        <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-4 space-y-2">
+                          <span className="font-bold text-emerald-400 block">Strengths</span>
+                          <ul className="list-disc pl-4 space-y-1 text-slate-300 text-xs">
+                            {selectedSub.feedback.strengths?.map((str, idx) => (
+                              <li key={idx}>{str}</li>
+                            )) || <li>None noted.</li>}
+                          </ul>
+                        </div>
+                        
+                        <div className="bg-red-500/5 border border-red-500/20 rounded-xl p-4 space-y-2">
+                          <span className="font-bold text-red-400 block">Weaknesses & Issues</span>
+                          <ul className="list-disc pl-4 space-y-1 text-slate-300 text-xs">
+                            {selectedSub.feedback.weaknesses?.map((wk, idx) => (
+                              <li key={idx}>{wk}</li>
+                            )) || <li>None noted.</li>}
+                          </ul>
+                        </div>
                       </div>
-                      
-                      <div className="bg-red-500/5 border border-red-500/20 rounded-xl p-4 space-y-2">
-                        <span className="font-bold text-red-400 block">Weaknesses & Issues</span>
-                        <ul className="list-disc pl-4 space-y-1 text-slate-300 text-xs">
-                          {selectedSub.feedback.weaknesses?.map((wk, idx) => (
-                            <li key={idx}>{wk}</li>
-                          )) || <li>None noted.</li>}
-                        </ul>
-                      </div>
-                    </div>
+                    )}
                   </div>
                 ) : (
                   <div className="flex items-center gap-2 text-yellow-400 bg-yellow-500/10 border border-yellow-500/20 px-4 py-3 rounded-xl text-sm">
@@ -196,7 +225,7 @@ function Submissions() {
             <div className="p-6 border-t border-slate-800 bg-[#111827] flex justify-end">
               <button
                 onClick={() => setSelectedSub(null)}
-                className="bg-emerald-500 hover:bg-emerald-400 text-black font-bold px-6 py-2.5 rounded-xl transition text-sm"
+                className="bg-emerald-500 hover:bg-emerald-400 text-black font-bold px-6 py-2.5 rounded-xl transition text-sm cursor-pointer"
               >
                 Close Review
               </button>

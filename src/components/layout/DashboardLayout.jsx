@@ -20,6 +20,7 @@ import {
   Menu,
   X,
   Bell,
+  History,
 } from "lucide-react";
 
 function DashboardLayout() {
@@ -35,6 +36,7 @@ function DashboardLayout() {
     { icon: Users, label: "Join Batch", path: "/student/join-batch" },
     { icon: Trophy, label: "Contests", path: "/student/contests" },
     { icon: Trophy, label: "Leaderboard", path: "/student/leaderboard" },
+    { icon: History, label: "History & Progress", path: "/student/history" },
     { icon: Award, label: "Certificates", path: "/student/certificates" },
     { icon: User, label: "Profile", path: "/student/profile" },
     { icon: Settings, label: "Settings", path: "/student/settings" },

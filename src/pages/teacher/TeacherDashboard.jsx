@@ -14,17 +14,56 @@ import {
   Zap,
 } from "lucide-react";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/services/api";
-import { Loader2 } from "lucide-react";
+import toast from "react-hot-toast";
 
 function TeacherDashboard() {
+  const queryClient = useQueryClient();
+
   const { data: dashboardResponse, isLoading: loading } = useQuery({
     queryKey: ["dashboard", "teacher"],
     queryFn: async () => {
       const res = await api.get("/dashboard/teacher");
       return res.data;
     },
+  });
+
+  const { data: joinRequestsRes } = useQuery({
+    queryKey: ["batches", "join-requests"],
+    queryFn: async () => {
+      const res = await api.get("/batches/join-requests");
+      return res.data.data || [];
+    }
+  });
+
+  const joinRequests = joinRequestsRes || [];
+
+  const acceptRequestMutation = useMutation({
+    mutationFn: async (requestId) => {
+      await api.post(`/batches/join-requests/${requestId}/accept`);
+    },
+    onSuccess: () => {
+      toast.success("Student join request accepted!");
+      queryClient.invalidateQueries(["batches", "join-requests"]);
+      queryClient.invalidateQueries(["dashboard", "teacher"]);
+    },
+    onError: () => {
+      toast.error("Failed to accept join request.");
+    }
+  });
+
+  const rejectRequestMutation = useMutation({
+    mutationFn: async (requestId) => {
+      await api.post(`/batches/join-requests/${requestId}/reject`);
+    },
+    onSuccess: () => {
+      toast.success("Student join request rejected.");
+      queryClient.invalidateQueries(["batches", "join-requests"]);
+    },
+    onError: () => {
+      toast.error("Failed to reject join request.");
+    }
   });
 
   const data = dashboardResponse?.data;
@@ -48,8 +87,8 @@ function TeacherDashboard() {
 
   if (loading) {
     return (
-      <div className="flex h-[50vh] items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
+      <div className="flex h-64 items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-emerald-400" />
       </div>
     );
   }
@@ -57,33 +96,30 @@ function TeacherDashboard() {
   return (
     <div className="space-y-6">
       {/* Welcome Banner */}
-      <div className="relative overflow-hidden rounded-2xl border border-emerald-500/30 bg-gradient-to-r from-emerald-500/10 to-purple-500/10 p-8">
+      <div className="relative overflow-hidden rounded-2xl border border-emerald-500/30 bg-gradient-to-r from-emerald-500/10 to-blue-500/10 p-8">
         <div className="relative z-10">
           <h1 className="mb-2 text-3xl font-bold text-white">
-            Welcome back, Teacher! 👋
+            Welcome back, Teacher! 👨‍🏫
           </h1>
           <p className="text-slate-300">
-            You have {pendingReviewsCount} pending reviews and {data?.totalStudents || 0} students in your classes.
+            You have {pendingReviewsCount} submissions pending review and {joinRequests.length} pending batch join requests.
           </p>
-          <div className="mt-6 flex gap-4">
+          <div className="mt-6 flex flex-wrap gap-4">
             <Link
-              to="/teacher/homework"
-              className="flex items-center gap-2 rounded-xl bg-emerald-500 px-6 py-3 font-semibold text-black transition hover:bg-emerald-400"
+              to="/teacher/homework/new"
+              className="flex items-center gap-2 rounded-xl bg-emerald-500 px-6 py-3 font-semibold text-black transition hover:bg-emerald-400 cursor-pointer"
             >
-              Create Homework
               <Plus className="h-4 w-4" />
+              Create Homework
             </Link>
             <Link
-              to="/teacher/contests"
-              className="flex items-center gap-2 rounded-xl border border-slate-600 bg-slate-800/50 px-6 py-3 font-semibold text-white transition hover:bg-slate-800"
+              to="/teacher/contests/new"
+              className="flex items-center gap-2 rounded-xl border border-slate-600 bg-slate-800/50 px-6 py-3 font-semibold text-white transition hover:bg-slate-800 cursor-pointer"
             >
-              Create Contest
               <Plus className="h-4 w-4" />
+              Create Contest
             </Link>
           </div>
-        </div>
-        <div className="absolute right-0 top-0 h-full w-1/3 opacity-10">
-          <BarChart3 className="h-full w-full text-emerald-400" />
         </div>
       </div>
 
@@ -107,6 +143,57 @@ function TeacherDashboard() {
           </Card>
         ))}
       </div>
+
+      {/* Pending Join Requests Section */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2 text-lg font-bold text-white">
+              <Users className="h-5 w-5 text-emerald-400" />
+              Batch Join Requests
+            </CardTitle>
+            <Badge variant="warning">{joinRequests.length} Pending</Badge>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {joinRequests.length === 0 ? (
+            <p className="text-sm text-slate-400 py-2">No pending student join requests for your batches.</p>
+          ) : (
+            <div className="space-y-3">
+              {joinRequests.map((req) => (
+                <div
+                  key={req.id}
+                  className="flex items-center justify-between rounded-xl border border-slate-700/50 bg-slate-800/30 p-4 transition hover:bg-slate-800/50"
+                >
+                  <div>
+                    <h4 className="font-semibold text-white">{req.studentName}</h4>
+                    <p className="text-xs text-slate-400">{req.studentEmail}</p>
+                    <p className="text-xs text-emerald-400 mt-1 font-mono">
+                      Batch: {req.batchName} ({req.collegeName})
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => acceptRequestMutation.mutate(req.id)}
+                      disabled={acceptRequestMutation.isPending}
+                      className="rounded-lg bg-emerald-500/20 px-3 py-2 text-sm font-semibold text-emerald-400 transition hover:bg-emerald-500/30 cursor-pointer"
+                    >
+                      Accept
+                    </button>
+                    <button
+                      onClick={() => rejectRequestMutation.mutate(req.id)}
+                      disabled={rejectRequestMutation.isPending}
+                      className="rounded-lg bg-red-500/20 px-3 py-2 text-sm font-semibold text-red-400 transition hover:bg-red-500/30 cursor-pointer"
+                    >
+                      Reject
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Pending Reviews */}

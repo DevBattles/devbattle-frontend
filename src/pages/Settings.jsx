@@ -8,6 +8,7 @@ import api from "@/services/api";
 import { toast } from "react-hot-toast";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/useAuth";
+import { useTheme } from "@/context/ThemeContext";
 import {
   User,
   Bell,
@@ -23,6 +24,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 
 function Settings() {
+  const { theme, setTheme } = useTheme();
   const { data: userResponse, isLoading } = useQuery({
     queryKey: ["profile"],
     queryFn: async () => {
@@ -405,8 +407,12 @@ function SettingsContent({ userData }) {
                     Theme
                   </label>
                   <Select 
-                    value={appearance.theme} 
-                    onValueChange={(val) => setAppearance({ ...appearance, theme: val })}
+                    value={appearance.theme || theme} 
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setAppearance({ ...appearance, theme: val });
+                      setTheme(val);
+                    }}
                   >
                     <SelectItem value="dark">Dark Mode</SelectItem>
                     <SelectItem value="light">Light Mode</SelectItem>
@@ -420,7 +426,7 @@ function SettingsContent({ userData }) {
                   </label>
                   <Select 
                     value={appearance.language} 
-                    onValueChange={(val) => setAppearance({ ...appearance, language: val })}
+                    onChange={(e) => setAppearance({ ...appearance, language: e.target.value })}
                   >
                     <SelectItem value="en">English</SelectItem>
                     <SelectItem value="es">Spanish</SelectItem>

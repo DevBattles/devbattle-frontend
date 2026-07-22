@@ -10,25 +10,28 @@ import App from "./App";
 import "./styles/global.css";
 
 import { AuthProvider } from "./context/AuthContext";
+import { ThemeProvider } from "./context/ThemeContext";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <AuthProvider>
-          <Toaster
-            position="top-right"
-            toastOptions={{
-              duration: 3000,
-              style: {
-                background: "#111827",
-                color: "#fff",
-                border: "1px solid #334155",
-              },
-            }}
-          />
+          <ThemeProvider>
+            <Toaster
+              position="top-right"
+              toastOptions={{
+                duration: 3000,
+                style: {
+                  background: "#111827",
+                  color: "#fff",
+                  border: "1px solid #334155",
+                },
+              }}
+            />
 
-          <App />
+            <App />
+          </ThemeProvider>
         </AuthProvider>
       </BrowserRouter>
       <ReactQueryDevtools initialIsOpen={false} />

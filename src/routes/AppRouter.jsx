@@ -29,6 +29,7 @@ import AIChat from "@/pages/student/AIChat";
 import Certificates from "@/pages/student/Certificates";
 import Notifications from "@/pages/student/Notifications";
 import JoinBatch from "@/pages/student/JoinBatch";
+import StudentHistory from "@/pages/student/History";
 
 // Teacher Pages
 import TeacherDashboard from "@/pages/teacher/TeacherDashboard";
@@ -162,6 +163,7 @@ function AppRouter() {
         <Route path="certificates" element={<Certificates />} />
         <Route path="notifications" element={<Notifications />} />
         <Route path="join-batch" element={<JoinBatch />} />
+        <Route path="history" element={<StudentHistory />} />
       </Route>
 
       {/* ================= TEACHER ROUTES ================= */}

@@ -385,60 +385,155 @@ function Workspace() {
     };
   }, []);
 
-  const shouldUseLivePreview = workspaceKind === "frontend" || workspaceKind === "react";
+  const shouldUseLivePreview = workspaceKind === "frontend" || workspaceKind === "react" || Object.keys(files).some(f => f.endsWith('.html') || f.endsWith('.jsx'));
 
   const updatePreview = useCallback(() => {
-    const html = files["index.html"]?.code || "";
-    const css = files["style.css"]?.code || "";
-    const js = files["script.js"]?.code || "";
+    if (!files || Object.keys(files).length === 0) return;
 
-    const errorScript = `
+    const isReact = workspaceKind === "react" || Object.keys(files).some(f => f.endsWith('.jsx') || f === 'App.jsx');
+
+    // Aggregate all CSS files
+    const cssCode = Object.entries(files)
+      .filter(([filename]) => filename.endsWith('.css'))
+      .map(([_, f]) => f.code || '')
+      .join('\n');
+
+    const errorBannerScript = `
       <script>
+        function showError(msg, line, col) {
+          const banner = document.getElementById('devbattle-error-banner');
+          if (banner) {
+            banner.style.display = 'block';
+            banner.innerText = 'Runtime Error: ' + msg + (line ? ' (Line ' + line + ':' + col + ')' : '');
+          }
+          try {
+            window.parent.postMessage({ type: 'iframe-error', message: msg, line: line || 0, col: col || 0 }, '*');
+          } catch(e) {}
+        }
         window.onerror = function(message, source, lineno, colno, error) {
-          window.parent.postMessage({
-            type: 'iframe-error',
-            message: message,
-            line: lineno,
-            col: colno
-          }, '*');
+          showError(message, lineno, colno);
           return false;
         };
       </script>
     `;
 
-    let fullHtml = html;
+    const errorBannerStyle = `
+      <style>
+        #devbattle-error-banner {
+          display: none;
+          position: fixed;
+          top: 10px;
+          left: 10px;
+          right: 10px;
+          z-index: 999999;
+          background-color: #fef2f2;
+          border: 1px solid #f87171;
+          color: #991b1b;
+          padding: 12px 16px;
+          border-radius: 8px;
+          font-family: monospace;
+          font-size: 13px;
+          white-space: pre-wrap;
+          box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+        }
+      </style>
+    `;
 
-    // Strip external links/scripts to style.css and script.js to prevent 404 console errors in iframe
-    fullHtml = fullHtml.replace(/<link[^>]*href=["']\s*(\.\/)?style\.css\s*["'][^>]*>/gi, '');
-    fullHtml = fullHtml.replace(/<script[^>]*src=["']\s*(\.\/)?script\.js\s*["'][^>]*><\/script>/gi, '');
+    if (isReact) {
+      // Aggregate JSX / JS files
+      const jsxFiles = Object.entries(files)
+        .filter(([filename]) => filename.endsWith('.jsx') || filename.endsWith('.js'))
+        .map(([_, f]) => f.code || '')
+        .join('\n');
 
-    // Inject error script first
-    if (fullHtml.includes("<head>")) {
-      fullHtml = fullHtml.replace("<head>", `<head>${errorScript}`);
-    } else if (fullHtml.includes("<html>")) {
-      fullHtml = fullHtml.replace("<html>", `<html>${errorScript}`);
+      const fullReactHtml = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="UTF-8" />
+          <title>React Live Preview</title>
+          <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+          <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+          <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+          ${errorBannerScript}
+          ${errorBannerStyle}
+          <style>${cssCode}</style>
+        </head>
+        <body style="margin: 0; padding: 16px; font-family: sans-serif; background-color: #ffffff; color: #1e293b;">
+          <div id="devbattle-error-banner"></div>
+          <div id="root"></div>
+
+          <script type="text/babel">
+            try {
+              ${jsxFiles}
+
+              if (typeof App !== 'undefined') {
+                const container = document.getElementById('root');
+                const root = ReactDOM.createRoot(container);
+                root.render(<App />);
+              } else if (typeof Component !== 'undefined') {
+                const container = document.getElementById('root');
+                const root = ReactDOM.createRoot(container);
+                root.render(<Component />);
+              }
+            } catch (err) {
+              showError(err.message || String(err));
+            }
+          </script>
+        </body>
+        </html>
+      `;
+
+      setPreviewHtml(fullReactHtml);
     } else {
-      fullHtml = errorScript + fullHtml;
-    }
+      // HTML/CSS/JS Project
+      const htmlFile = files["index.html"]?.code || Object.values(files).find(f => f.name?.endsWith('.html'))?.code || '<div id="app"><h1>Live Preview</h1></div>';
+      const jsCode = Object.entries(files)
+        .filter(([filename]) => filename.endsWith('.js') && !filename.endsWith('.jsx'))
+        .map(([_, f]) => f.code || '')
+        .join('\n');
 
-    // Inject CSS
-    const styleTag = `<style>${css}</style>`;
-    if (fullHtml.includes("</head>")) {
-      fullHtml = fullHtml.replace("</head>", `${styleTag}</head>`);
-    } else {
-      fullHtml = styleTag + fullHtml;
-    }
+      let fullHtml = htmlFile;
 
-    // Inject JS
-    const scriptTag = `<script>${js}</script>`;
-    if (fullHtml.includes("</body>")) {
-      fullHtml = fullHtml.replace("</body>", `${scriptTag}</body>`);
-    } else {
-      fullHtml = fullHtml + scriptTag;
-    }
+      // Strip external links/scripts to local style.css / script.js to avoid 404s
+      fullHtml = fullHtml.replace(/<link[^>]*href=["']\s*(\.\/)?style\.css\s*["'][^>]*>/gi, '');
+      fullHtml = fullHtml.replace(/<script[^>]*src=["']\s*(\.\/)?script\.js\s*["'][^>]*><\/script>/gi, '');
 
-    setPreviewHtml(fullHtml);
-  }, [files]);
+      const bannerDiv = `<div id="devbattle-error-banner"></div>`;
+
+      // Inject error script and styles into head
+      if (fullHtml.includes("<head>")) {
+        fullHtml = fullHtml.replace("<head>", `<head>${errorBannerScript}${errorBannerStyle}`);
+      } else {
+        fullHtml = errorBannerScript + errorBannerStyle + fullHtml;
+      }
+
+      // Inject error banner div into body
+      if (fullHtml.includes("<body")) {
+        fullHtml = fullHtml.replace(/<body[^>]*>/i, (match) => `${match}\n${bannerDiv}`);
+      } else {
+        fullHtml = bannerDiv + fullHtml;
+      }
+
+      // Inject CSS
+      const styleTag = `<style>${cssCode}</style>`;
+      if (fullHtml.includes("</head>")) {
+        fullHtml = fullHtml.replace("</head>", `${styleTag}</head>`);
+      } else {
+        fullHtml = styleTag + fullHtml;
+      }
+
+      // Inject JS
+      const scriptTag = `<script>try { ${jsCode} } catch(e) { showError(e.message); }</script>`;
+      if (fullHtml.includes("</body>")) {
+        fullHtml = fullHtml.replace("</body>", `${scriptTag}</body>`);
+      } else {
+        fullHtml = fullHtml + scriptTag;
+      }
+
+      setPreviewHtml(fullHtml);
+    }
+  }, [files, workspaceKind]);
 
   // Update preview when files change (if autoRefresh is true)
   useEffect(() => {

@@ -23,8 +23,13 @@ function StudentContests() {
   const { data, isLoading: loading } = useQuery({
     queryKey: ["contests", "student"],
     queryFn: async () => {
-      const res = await api.get("/contests");
+      const [res, subRes] = await Promise.all([
+        api.get("/contests"),
+        api.get("/contests/submissions").catch(() => ({ data: { data: [] } }))
+      ]);
       const list = res.data.data?.data || res.data.data || [];
+      const userSubmissions = subRes.data?.data || [];
+      const attemptedContestIds = new Set(userSubmissions.map(s => s.contestId));
 
       // Check registration for each contest
       const regMap = {};
@@ -39,12 +44,13 @@ function StudentContests() {
         })
       );
       
-      return { contestsList: list, registrations: regMap };
+      return { contestsList: list, registrations: regMap, attemptedContestIds };
     },
   });
 
   const contestsList = data?.contestsList || [];
   const registrations = data?.registrations || {};
+  const attemptedContestIds = data?.attemptedContestIds || new Set();
 
   const registerMutation = useMutation({
     mutationFn: async (contestId) => {
@@ -53,7 +59,6 @@ function StudentContests() {
     },
     onSuccess: (contestId) => {
       toast.success("Successfully registered for contest!");
-      // Optimistically update the registration status
       queryClient.setQueryData(["contests", "student"], (old) => {
         if (!old) return old;
         return {
@@ -149,9 +154,16 @@ function StudentContests() {
 
             const isUpcoming = startTimeDate > now;
             const isActive = startTimeDate <= now && endTimeDate >= now;
-            const isCompleted = endTimeDate < now;
+            const isEnded = endTimeDate < now;
+            const hasAttempted = attemptedContestIds.has(contest.id);
 
-            const statusText = isUpcoming ? "Upcoming" : isActive ? "Active" : "Completed";
+            const statusText = isUpcoming
+              ? "Upcoming"
+              : isActive
+              ? "Live"
+              : hasAttempted
+              ? "Completed"
+              : "Ended";
 
             return (
               <Card
@@ -193,8 +205,8 @@ function StudentContests() {
                     </div>
 
                     <div className="flex flex-col items-end gap-3">
-                      {isCompleted ? (
-                        <span className="text-sm text-slate-500 font-semibold">Ended</span>
+                      {isEnded ? (
+                        <span className="text-sm text-slate-500 font-semibold">{hasAttempted ? "Completed" : "Ended"}</span>
                       ) : isUpcoming ? (
                         isRegistered ? (
                           <div className="flex items-center gap-2 text-sm text-emerald-400">

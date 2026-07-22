@@ -20,20 +20,30 @@ function JoinBatch() {
     },
   });
 
-  const userData = userResponse?.data || {};
+  // Get student's pending join requests
+  const { data: pendingRequestsRes } = useQuery({
+    queryKey: ["batches", "my-join-requests"],
+    queryFn: async () => {
+      const res = await api.get("/batches/my-join-requests");
+      return res.data.data || [];
+    }
+  });
+
+  const pendingRequests = pendingRequestsRes || [];
 
   const joinBatchMutation = useMutation({
     mutationFn: async (code) => {
       const res = await api.post("/batches/join", { joinCode: code });
       return res.data;
     },
-    onSuccess: () => {
-      toast.success("Successfully joined the batch!");
+    onSuccess: (res) => {
+      toast.success(res?.message || "Join request submitted! Awaiting teacher approval.");
       setJoinCode("");
       queryClient.invalidateQueries(["profile"]);
+      queryClient.invalidateQueries(["batches", "my-join-requests"]);
     },
     onError: (error) => {
-      toast.error(error.response?.data?.message || "Failed to join batch. Please check your join code.");
+      toast.error(error.response?.data?.message || "Failed to submit join request. Please check your join code.");
     },
   });
 
@@ -60,24 +70,24 @@ function JoinBatch() {
       <div>
         <h1 className="text-2xl font-bold text-white">Join Batch</h1>
         <p className="text-slate-400">
-          Enroll in your classroom or course batch using a join code provided by your teacher.
+          Request to enroll in your classroom or course batch using a join code provided by your teacher.
         </p>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
-        {/* Active Batch details */}
+        {/* Active Batch details & Pending Requests */}
         <Card className="border-slate-700/50 bg-[#111827]/30">
           <CardHeader>
             <CardTitle className="text-lg text-white font-bold flex items-center gap-2">
               <GraduationCap className="h-5 w-5 text-emerald-400" />
-              Current Batch Enrollment
+              Current Batch Status
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             {userData.studentProfile?.batch ? (
               <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-5 space-y-4">
                 <div>
-                  <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Active Batch</p>
+                  <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Enrolled Batch</p>
                   <p className="text-lg font-bold text-white mt-0.5">{userData.studentProfile.batch}</p>
                 </div>
                 {userData.studentProfile.college?.name && (
@@ -97,7 +107,25 @@ function JoinBatch() {
               <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-6 text-center text-slate-400 space-y-2">
                 <Users className="h-10 w-10 mx-auto text-slate-600" />
                 <p className="font-semibold text-white">Not enrolled in any batch</p>
-                <p className="text-xs">Enter a join code on the right to enroll and view your coursework.</p>
+                <p className="text-xs">Enter a join code on the right to send a join request to your teacher.</p>
+              </div>
+            )}
+
+            {/* Display pending requests if any */}
+            {pendingRequests.length > 0 && (
+              <div className="space-y-2 border-t border-slate-800 pt-4">
+                <p className="text-xs font-semibold text-yellow-400 uppercase tracking-wider">Pending Approval Requests</p>
+                {pendingRequests.map(req => (
+                  <div key={req.id} className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-3 text-xs flex justify-between items-center">
+                    <div>
+                      <p className="font-bold text-white">{req.batchName}</p>
+                      <p className="text-slate-400">Requested: {req.createdAt ? new Date(req.createdAt).toLocaleDateString() : 'Recently'}</p>
+                    </div>
+                    <span className="bg-yellow-500/20 text-yellow-400 px-2.5 py-1 rounded-full font-semibold text-[10px] uppercase">
+                      Pending Teacher
+                    </span>
+                  </div>
+                ))}
               </div>
             )}
           </CardContent>
@@ -127,13 +155,13 @@ function JoinBatch() {
               <Button
                 type="submit"
                 disabled={joinBatchMutation.isPending}
-                className="w-full bg-emerald-500 hover:bg-emerald-400 text-black font-semibold flex items-center justify-center gap-2 py-3 rounded-xl transition"
+                className="w-full bg-emerald-500 hover:bg-emerald-400 text-black font-semibold flex items-center justify-center gap-2 py-3 rounded-xl transition cursor-pointer"
               >
                 {joinBatchMutation.isPending ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <>
-                    Join Batch
+                    Submit Join Request
                     <ArrowRight className="h-4 w-4" />
                   </>
                 )}

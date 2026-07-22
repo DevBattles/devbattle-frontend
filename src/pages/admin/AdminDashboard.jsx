@@ -9,13 +9,19 @@ import {
   BarChart3,
   Building2,
   ArrowRight,
+  UserX,
+  UserCheck,
+  Loader2,
 } from "lucide-react";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/services/api";
+import toast from "react-hot-toast";
 
 function AdminDashboard() {
-  const { data: dashboardData } = useQuery({
+  const queryClient = useQueryClient();
+
+  const { data: dashboardData, isLoading: loading } = useQuery({
     queryKey: ["dashboard", "admin"],
     queryFn: async () => {
       const res = await api.get("/dashboard/admin");
@@ -25,6 +31,19 @@ function AdminDashboard() {
 
   const data = dashboardData?.data;
 
+  const approveTeacherMutation = useMutation({
+    mutationFn: async ({ id, isApproved }) => {
+      await api.put(`/admin/teachers/${id}/approve`, { isApproved });
+    },
+    onSuccess: (_, { isApproved }) => {
+      toast.success(isApproved ? "Teacher account approved!" : "Teacher account rejected.");
+      queryClient.invalidateQueries(["dashboard", "admin"]);
+    },
+    onError: () => {
+      toast.error("Failed to update teacher approval status.");
+    }
+  });
+
   const platformStats = [
     { label: "Total Teachers", value: data?.analytics?.totalTeachers || 0, icon: Users, color: "emerald" },
     { label: "Total Students", value: data?.analytics?.totalStudents || 0, icon: GraduationCap, color: "blue" },
@@ -32,17 +51,20 @@ function AdminDashboard() {
     { label: "Total Questions", value: data?.analytics?.totalQuestions || 0, icon: BookOpen, color: "purple" },
   ];
 
-  const pendingApprovals = (data?.pendingTeachersList || []).map(t => ({
-    id: t.id,
-    name: t.username,
-    email: t.email,
-    department: "N/A",
-    requestedAt: "Recently"
-  }));
+  const pendingApprovals = data?.pendingTeachersList || [];
+  const studentsWithoutBatch = data?.studentsWithoutBatch || [];
 
   const departmentStats = [
     { name: "Global Platform", students: data?.analytics?.totalStudents || 0, teachers: data?.analytics?.totalTeachers || 0, growth: "-" },
   ];
+
+  if (loading) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-emerald-400" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -53,7 +75,7 @@ function AdminDashboard() {
             Welcome back, Admin! 👋
           </h1>
           <p className="text-slate-300">
-            Platform is running smoothly. You have 12 pending teacher approvals.
+            Platform is running smoothly. You have {data?.pendingTeachersApprovalCount || 0} pending teacher approvals.
           </p>
           <div className="mt-6 flex gap-4">
             <Link
@@ -107,35 +129,83 @@ function AdminDashboard() {
                 <Shield className="h-5 w-5 text-yellow-400" />
                 Pending Teacher Approvals
               </CardTitle>
-              <Badge variant="warning">12 Pending</Badge>
+              <Badge variant="warning">{pendingApprovals.length} Pending</Badge>
             </div>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {pendingApprovals.map((approval) => (
-                <div
-                  key={approval.id}
-                  className="flex items-center justify-between rounded-xl border border-slate-700/50 bg-slate-800/30 p-4 transition hover:bg-slate-800/50"
-                >
-                  <div className="flex-1">
-                    <h4 className="font-semibold text-white">{approval.name}</h4>
-                    <p className="text-sm text-slate-400">{approval.email}</p>
-                    <div className="mt-1 flex items-center gap-2 text-xs text-slate-500">
-                      <span>{approval.department}</span>
-                      <span>•</span>
-                      <span>{approval.requestedAt}</span>
+              {pendingApprovals.length === 0 ? (
+                <p className="text-sm text-slate-400">No pending teacher registration requests.</p>
+              ) : (
+                pendingApprovals.map((approval) => (
+                  <div
+                    key={approval.id}
+                    className="flex items-center justify-between rounded-xl border border-slate-700/50 bg-slate-800/30 p-4 transition hover:bg-slate-800/50"
+                  >
+                    <div className="flex-1">
+                      <h4 className="font-semibold text-white">{approval.username}</h4>
+                      <p className="text-sm text-slate-400">{approval.email}</p>
+                      <div className="mt-1 flex items-center gap-2 text-xs text-slate-500">
+                        <span>{approval.createdAt ? new Date(approval.createdAt).toLocaleDateString() : "Recently"}</span>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => approveTeacherMutation.mutate({ id: approval.id, isApproved: true })}
+                        disabled={approveTeacherMutation.isPending}
+                        className="rounded-lg bg-emerald-500/20 px-3 py-2 text-sm font-semibold text-emerald-400 transition hover:bg-emerald-500/30 cursor-pointer flex items-center gap-1"
+                      >
+                        <UserCheck className="h-3.5 w-3.5" />
+                        Approve
+                      </button>
+                      <button
+                        onClick={() => approveTeacherMutation.mutate({ id: approval.id, isApproved: false })}
+                        disabled={approveTeacherMutation.isPending}
+                        className="rounded-lg bg-red-500/20 px-3 py-2 text-sm font-semibold text-red-400 transition hover:bg-red-500/30 cursor-pointer flex items-center gap-1"
+                      >
+                        <UserX className="h-3.5 w-3.5" />
+                        Reject
+                      </button>
                     </div>
                   </div>
-                  <div className="flex gap-2">
-                    <button className="rounded-lg bg-emerald-500/20 px-3 py-2 text-sm font-semibold text-emerald-400 transition hover:bg-emerald-500/30">
-                      Approve
-                    </button>
-                    <button className="rounded-lg bg-red-500/20 px-3 py-2 text-sm font-semibold text-red-400 transition hover:bg-red-500/30">
-                      Reject
-                    </button>
+                ))
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Students Without Batch */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <GraduationCap className="h-5 w-5 text-blue-400" />
+                Students Without Batch
+              </CardTitle>
+              <Badge variant="secondary">{studentsWithoutBatch.length} Unassigned</Badge>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4 max-h-[300px] overflow-y-auto">
+              {studentsWithoutBatch.length === 0 ? (
+                <p className="text-sm text-slate-400">All registered students belong to a batch!</p>
+              ) : (
+                studentsWithoutBatch.map((student) => (
+                  <div
+                    key={student.id}
+                    className="flex items-center justify-between rounded-xl border border-slate-700/50 bg-slate-800/30 p-4 transition hover:bg-slate-800/50"
+                  >
+                    <div>
+                      <h4 className="font-semibold text-white">{student.username}</h4>
+                      <p className="text-sm text-slate-400">{student.email}</p>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Registered: {student.createdAt ? new Date(student.createdAt).toLocaleDateString() : "Recently"}
+                      </p>
+                    </div>
+                    <Badge variant="warning" className="text-xs">No Batch</Badge>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </CardContent>
         </Card>
