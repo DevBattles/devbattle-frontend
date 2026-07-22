@@ -17,14 +17,32 @@ function AIChat() {
   const [searchParams] = useSearchParams();
   const questionIdParam = searchParams.get("questionId");
   const [activeQuestion, setActiveQuestion] = useState(null);
-  const [messages, setMessages] = useState([
-    {
-      id: 1,
-      role: "assistant",
-      content: "Hello! I'm your AI coding assistant. I can help you with React, Node.js, JavaScript, HTML, CSS, Tailwind, debugging, project reviews, and more. What would you like to work on today?",
-      timestamp: new Date(),
-    },
-  ]);
+  const [messages, setMessages] = useState(() => {
+    try {
+      const persisted = localStorage.getItem("ai_chat_messages");
+      if (persisted) {
+        const parsed = JSON.parse(persisted);
+        return parsed.map((msg) => ({
+          ...msg,
+          timestamp: new Date(msg.timestamp),
+        }));
+      }
+    } catch (e) {
+      console.error("Failed to load chat history", e);
+    }
+    return [
+      {
+        id: 1,
+        role: "assistant",
+        content: "Hello! I'm your AI coding assistant. I can help you with React, Node.js, JavaScript, HTML, CSS, Tailwind, debugging, project reviews, and more. What would you like to work on today?",
+        timestamp: new Date(),
+      },
+    ];
+  });
+
+  useEffect(() => {
+    localStorage.setItem("ai_chat_messages", JSON.stringify(messages));
+  }, [messages]);
   const [input, setInput] = useState("");
   const [selectedTopic, setSelectedTopic] = useState("general");
   const [isTyping, setIsTyping] = useState(false);

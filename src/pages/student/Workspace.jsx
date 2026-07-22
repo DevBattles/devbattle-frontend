@@ -1049,7 +1049,7 @@ function Workspace() {
                   srcDoc={previewHtml}
                   title="Preview"
                   className={`h-full w-full border-0 ${isResizing ? "pointer-events-none" : ""}`}
-                  sandbox="allow-scripts"
+                  sandbox="allow-scripts allow-same-origin"
                 />
               </div>
             </div>
