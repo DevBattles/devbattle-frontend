@@ -20,6 +20,8 @@ function JoinBatch() {
     },
   });
 
+  const userData = userResponse?.data || {};
+
   // Get student's pending join requests
   const { data: pendingRequestsRes } = useQuery({
     queryKey: ["batches", "my-join-requests"],
