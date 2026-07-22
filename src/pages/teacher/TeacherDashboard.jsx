@@ -205,7 +205,7 @@ function TeacherDashboard() {
                 <ClipboardList className="h-5 w-5 text-yellow-400" />
                 Pending Reviews
               </CardTitle>
-              <Badge variant="warning">3 Pending</Badge>
+              <Badge variant="warning">{pendingReviewsCount} Pending</Badge>
             </div>
           </CardHeader>
           <CardContent>
