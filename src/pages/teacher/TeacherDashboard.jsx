@@ -12,6 +12,7 @@ import {
   Plus,
   ArrowRight,
   Zap,
+  Loader2,
 } from "lucide-react";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -169,7 +170,7 @@ function TeacherDashboard() {
                     <h4 className="font-semibold text-white">{req.studentName}</h4>
                     <p className="text-xs text-slate-400">{req.studentEmail}</p>
                     <p className="text-xs text-emerald-400 mt-1 font-mono">
-                      Batch: {req.batchName} ({req.collegeName})
+                      Batch: {req.batchName}{req.collegeName ? ` (${req.collegeName})` : ''}
                     </p>
                   </div>
                   <div className="flex gap-2">
